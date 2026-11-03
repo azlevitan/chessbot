@@ -79,4 +79,11 @@ impl SampleWriter {
         self.flush()?;
         Ok(self.count)
     }
+
+    /// Flush and synchronize records before an atomic chunk publication.
+    pub fn finish_synced(mut self) -> Result<u64> {
+        self.flush()?;
+        self.out.get_ref().sync_all().context("synchronizing sample file")?;
+        Ok(self.count)
+    }
 }

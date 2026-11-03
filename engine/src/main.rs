@@ -4,33 +4,44 @@ use std::io::{stdin, stdout};
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
+use engine::nn::infer_opts::InferOptions;
 use engine::nn::ort_infer::load_evaluator;
 use engine::uci::uci_loop;
 
 const USAGE: &str = "usage: engine [command] [args]
 
 commands:
-  uci [--model <path.onnx>]          UCI loop (default; uniform dummy net without --model)
+  uci [--model <path.onnx>|uniform] [--ep auto|cpu|coreml] [--threads T]
+                                     UCI loop (default; uniform net without --model)
   dump-test-vectors [--out <path>]   write contract test vectors
-  convert-pgn --input <pgn> --out <bin> [--max-games N]
+  convert-pgn --input <pgn>|- (--out <bin> | --out-dir <dir>)
+              [--chunk-samples 262144] [--max-games N] [--max-samples M] [--skip-games K]
                                      PGN games -> supervised training samples
-  selfplay --model <onnx> --games <N> --sims 200 --out <bin>
-           [--seed S] [--max-plies 512] [--temp-plies 30]
+  selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
+           [--seed S] [--max-plies 512] [--temp-plies 30] [--ep auto|cpu|coreml] [--threads T]
                                      self-play with root Dirichlet noise";
 
 fn run_uci(args: &[String]) -> Result<()> {
     let mut model: Option<PathBuf> = None;
+    let mut opts = InferOptions::default();
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         match arg.as_str() {
-            "--model" => model = Some(it.next().context("--model requires a path")?.into()),
+            "--model" => {
+                let value = it.next().context("--model requires a path or uniform")?;
+                model = (value != "uniform").then(|| PathBuf::from(value));
+            }
+            "--ep" | "--threads" => {
+                let value = it.next().with_context(|| format!("{arg} requires a value"))?;
+                opts.parse_flag(arg, value)?;
+            }
             other => bail!("unknown argument for uci: {other}\n\n{USAGE}"),
         }
     }
-    let evaluator = load_evaluator(model.as_deref())?;
+    let evaluator = load_evaluator(model.as_deref(), &opts)?;
     match &model {
         Some(p) => eprintln!("chessbot: loaded model {}", p.display()),
-        None => eprintln!("chessbot: no --model given, using uniform dummy network"),
+        None => eprintln!("chessbot: using uniform dummy network"),
     }
     uci_loop::run(evaluator, stdin().lock(), stdout().lock())
 }
