@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chessbot-training"
+version = "0.1.0"
+description = "PyTorch training side of the chessbot engine (reads Rust-encoded .bin samples)"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.5",
+    "numpy>=2.0",
+    "onnx>=1.17",
+    "onnxruntime>=1.20",
+    "chess>=1.11",
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["data*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
