@@ -85,7 +85,7 @@
     2. Converting `training/tests/fixtures/sample.pgn` with `--out-dir --chunk-samples 25` gives chunks of 25, 25 and 10 samples (60 total) with `games` summing to 3.
     3. `--skip-games 1` gives 3 − 1 games' samples.
   - RAM: ≤ 1 chunk buffered by `BufWriter` (KB scale).
-- [ ] **6.3 Multi-chunk memmap dataset + weighted source sampler.**
+- [x] **6.3 Multi-chunk memmap dataset + weighted source sampler.**
   - Files: `training/data/chunk_dataset.py` (new), `training/data/sampler.py` (new), `training/tests/test_chunk_dataset.py` (new).
   - Interface:
     - `read_sidecar(bin_path) -> dict`
