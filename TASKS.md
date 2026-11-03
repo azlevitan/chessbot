@@ -193,13 +193,15 @@
     2. With `--temp-plies 0`, the played move at every ply equals the argmax of the saved `TrainingSample.policy`.
   - RAM: `P = 32` → 32 trees × ≤ 3.6 MB + ORT batch I/O (32 × 4168 × 4 B ≈ 0.5 MB) ≈ 120 MB. The selfplay process stays ≤ 600 MB including the ORT/CoreML runtime.
   - Verified on Linux CPU: `cd engine && cargo test --release` (90 tests) and `python3 pipeline/test_uci_mate.py` (3/3 mates) exit 0. Tests cover byte-identical chunks/sidecars at P=1/3/4 with K=1/4 and both reuse modes, greedy saved-policy argmax, combined inference routing, exact new-simulation budgets, and failure recovery. P=32 peak-RSS smoke checks: uniform (200 sims, 128-ply cap) 17.2 MiB; available ONNX model (8 sims, 4-ply cap) 89.3 MiB. CoreML RSS remains unverified on this Linux host.
-- [ ] **7.5 Resignation with playthrough audit (SPEC §7).**
+- [x] **7.5 Resignation with playthrough audit (SPEC §7).**
   - Files: `engine/src/selfplay/resign.rs` (new: `ResignTracker { threshold, consecutive, playthrough }`; `update(stm: Color, root_q: f32) -> Option<Color>` returns the resigner; `would_resign` recorded in playthrough games), `engine/src/selfplay/driver.rs`, `engine/src/selfplay/stats.rs`, `engine/src/cli/selfplay.rs` (`--resign-threshold -0.95 --resign-consecutive 3 --resign-playthrough 0.1`), `engine/tests/resign.rs` (new).
   - Test (pure logic):
     1. With threshold −0.9 and 3 consecutive, the sequence White q = [−0.95, −0.95, −0.5, −0.95, −0.95, −0.95] resigns only on the 6th White move.
     2. A playthrough tracker never resigns, but records `would_resign = White` at that point.
     3. The false-positive counter increments iff the game result is not a White loss.
     4. Integration: uniform selfplay with `--resign-threshold -1.0` has `terminations.resign == 0` and a sidecar `resign` block with the configured values.
+  - Supporting changes: `engine/src/selfplay/game.rs` (config validation, resignation termination, audit fields, and an optional played move for the final resignation sample), `engine/src/selfplay/mod.rs`, `engine/src/selfplay/batch_runner.rs`, and existing selfplay/chunk tests. Additional integration tests live in `engine/tests/resign_games.rs` and `engine/tests/resign_cli.rs`.
+  - Verified on Linux CPU: `cd engine && cargo test --release` (102 tests) and `python3 pipeline/test_uci_mate.py` (3/3 mates) exit 0. Covers both colours' resignation labels, recovery and threshold boundaries, first-trigger auditing against all final results, disabled resignation, configured sidecars, validation before output changes, exactly one initial RNG draw, and identical samples/audit counters at P=1/3/4 with K=1/4 and both reuse modes. The 492-byte sample contract is unchanged.
 - [ ] **7.6 `engine bench` + regression floor.**
   - Files: `engine/src/cli/bench.rs` (new), `engine/src/cli/mod.rs`, `engine/src/main.rs`, `pipeline/bench_gate.py` (new, stdlib).
   - CLI: `engine bench [--model <onnx>|uniform] [--sims 800] [--batch 8] [--positions 6] [--ep ..] [--threads ..]` searches 6 fixed FENs (startpos, Kiwipete, 4 middlegames listed in the file) and prints the SPEC §8 JSON line.

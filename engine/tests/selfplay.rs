@@ -13,7 +13,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 fn small_cfg() -> SelfPlayConfig {
-    SelfPlayConfig { sims: 24, max_plies: 60, temp_plies: 30, noise: RootNoise::default(), reuse: true }
+    SelfPlayConfig { sims: 24, max_plies: 60, ..SelfPlayConfig::default() }
 }
 
 #[test]
@@ -65,9 +65,14 @@ fn game_records_are_valid_and_seeded() {
         assert_eq!(p.policy.len(), legal_moves(&board).len(), "policy covers every legal move");
         let sum: f32 = p.policy.iter().map(|e| e.1).sum();
         assert!((sum - 1.0).abs() < 1e-5);
-        assert!(p.policy.iter().any(|&(mv, prob)| mv == p.played && prob > 0.0), "played an unvisited move");
         assert!((-1.0..=1.0).contains(&p.root_q));
-        board.play_unchecked(p.played);
+        if let Some(played) = p.played {
+            assert!(p.policy.iter().any(|&(mv, prob)| mv == played && prob > 0.0), "played an unvisited move");
+            board.play_unchecked(played);
+        } else {
+            assert_eq!(game.termination, Termination::Resign);
+            assert_eq!(p.board, game.plies.last().unwrap().board);
+        }
     }
     let again = play_game(&mut UniformEvaluator, &cfg, &mut StdRng::seed_from_u64(42)).unwrap();
     let moves = |g: &engine::selfplay::GameRecord| g.plies.iter().map(|p| p.played).collect::<Vec<_>>();

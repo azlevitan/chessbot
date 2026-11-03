@@ -119,7 +119,8 @@ fn zero_temperature_plays_an_argmax_of_every_saved_policy() {
         },
         |_, game| {
             for (ply, sample) in game.plies.iter().zip(game_samples(&game)) {
-                let index = move_to_index(&ply.board, ply.played) as u16;
+                let Some(played_move) = ply.played else { continue };
+                let index = move_to_index(&ply.board, played_move) as u16;
                 let policy = sample.policy;
                 let active = &policy[..sample.num_legal_moves as usize];
                 let played = active
