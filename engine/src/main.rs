@@ -11,7 +11,12 @@ const USAGE: &str = "usage: engine [command] [args]
 
 commands:
   uci [--model <path.onnx>]          UCI loop (default; uniform dummy net without --model)
-  dump-test-vectors [--out <path>]   write contract test vectors";
+  dump-test-vectors [--out <path>]   write contract test vectors
+  convert-pgn --input <pgn> --out <bin> [--max-games N]
+                                     PGN games -> supervised training samples
+  selfplay --model <onnx> --games <N> --sims 200 --out <bin>
+           [--seed S] [--max-plies 512] [--temp-plies 30]
+                                     self-play with root Dirichlet noise";
 
 fn run_uci(args: &[String]) -> Result<()> {
     let mut model: Option<PathBuf> = None;
@@ -36,6 +41,8 @@ fn main() -> Result<()> {
         None => run_uci(&[]),
         Some("uci") => run_uci(&args[1..]),
         Some("dump-test-vectors") => engine::cli::dump_vectors::run(&args[1..]),
+        Some("convert-pgn") => engine::cli::convert_pgn::run(&args[1..]),
+        Some("selfplay") => engine::cli::selfplay::run(&args[1..]),
         Some("-h" | "--help") => {
             println!("{USAGE}");
             Ok(())
