@@ -1,5 +1,6 @@
 //! Command-line subcommands for the `engine` binary.
 
+pub mod bench;
 pub mod bin_writer;
 pub mod chunk_writer;
 mod pgn_output;
