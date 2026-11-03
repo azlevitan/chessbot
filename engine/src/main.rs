@@ -1,14 +1,42 @@
-//! `engine` binary entry point: dispatches subcommands.
+//! `engine` binary entry point. No arguments (or `uci`) starts the UCI loop.
 
-use anyhow::{bail, Result};
+use std::io::{stdin, stdout};
+use std::path::PathBuf;
 
-const USAGE: &str = "usage: engine <command> [args]\n\ncommands:\n  dump-test-vectors [--out <path>]";
+use anyhow::{bail, Context, Result};
+use engine::nn::ort_infer::load_evaluator;
+use engine::uci::uci_loop;
+
+const USAGE: &str = "usage: engine [command] [args]
+
+commands:
+  uci [--model <path.onnx>]          UCI loop (default; uniform dummy net without --model)
+  dump-test-vectors [--out <path>]   write contract test vectors";
+
+fn run_uci(args: &[String]) -> Result<()> {
+    let mut model: Option<PathBuf> = None;
+    let mut it = args.iter();
+    while let Some(arg) = it.next() {
+        match arg.as_str() {
+            "--model" => model = Some(it.next().context("--model requires a path")?.into()),
+            other => bail!("unknown argument for uci: {other}\n\n{USAGE}"),
+        }
+    }
+    let evaluator = load_evaluator(model.as_deref())?;
+    match &model {
+        Some(p) => eprintln!("chessbot: loaded model {}", p.display()),
+        None => eprintln!("chessbot: no --model given, using uniform dummy network"),
+    }
+    uci_loop::run(evaluator, stdin().lock(), stdout().lock())
+}
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
+        None => run_uci(&[]),
+        Some("uci") => run_uci(&args[1..]),
         Some("dump-test-vectors") => engine::cli::dump_vectors::run(&args[1..]),
-        Some("-h" | "--help") | None => {
+        Some("-h" | "--help") => {
             println!("{USAGE}");
             Ok(())
         }

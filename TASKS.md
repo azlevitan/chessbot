@@ -24,12 +24,12 @@
 - [x] **GATE 3:** `pytest training/tests/test_overfit.py` exits with `0`.
 
 ## Phase 4: Rust ONNX Inference, Arena MCTS & UCI Loop
-- [ ] Add `ort = { version = "2.0.0-rc.15", features = ["coreml"] }` to `engine/Cargo.toml`.
-- [ ] Implement `engine/src/nn/ort_infer.rs`: loads an `.onnx` model (with dummy uniform fallback if no model path is passed) and evaluates batches of `18x8x8` planes.
-- [ ] Implement `engine/src/mcts/`: fixed-capacity arena MCTS (`65,536` max nodes) with PUCT (`c_puct = 1.5`), legal move masking, and perspective negation on backup.
-- [ ] Implement `engine/src/uci/uci_loop.rs`: supports `uci`, `isready`, `ucinewgame`, `position startpos/fen ... moves ...`, and `go nodes <N> / movetime <ms>`.
-- [ ] Write `pipeline/test_uci_mate.py`: spawns the compiled `engine` binary via subprocess, feeds 3 Mate-in-1 FENs with `go nodes 400`, and asserts the engine outputs the checkmating move every time.
-- [ ] **GATE 4:** `python3 pipeline/test_uci_mate.py` exits with `0`.
+- [x] Add `ort = { version = "2.0.0-rc.15", features = ["coreml"] }` to `engine/Cargo.toml`.
+- [x] Implement `engine/src/nn/ort_infer.rs`: loads an `.onnx` model (with dummy uniform fallback if no model path is passed) and evaluates batches of `18x8x8` planes.
+- [x] Implement `engine/src/mcts/`: fixed-capacity arena MCTS (`65,536` max nodes) with PUCT (`c_puct = 1.5`), legal move masking, and perspective negation on backup.
+- [x] Implement `engine/src/uci/uci_loop.rs`: supports `uci`, `isready`, `ucinewgame`, `position startpos/fen ... moves ...`, and `go nodes <N> / movetime <ms>`.
+- [x] Write `pipeline/test_uci_mate.py`: spawns the compiled `engine` binary via subprocess, feeds 3 Mate-in-1 FENs with `go nodes 400`, and asserts the engine outputs the checkmating move every time.
+- [x] **GATE 4:** `python3 pipeline/test_uci_mate.py` exits with `0`.
 
 ## Phase 5: Supervised Bootstrapping & Self-Play RL Loop
 - [ ] Add `engine convert-pgn --input <pgn> --out <bin>` in Rust to rapidly convert PGN games into `.bin` training chunks.

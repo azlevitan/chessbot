@@ -33,15 +33,21 @@ fn is_cozy_castle(board: &Board, mv: Move) -> bool {
         && board.color_on(mv.to) == Some(board.side_to_move())
 }
 
-/// Map a legal move on `board` to its canonical policy index in `0..NUM_MOVES`.
-pub fn move_to_index(board: &Board, mv: Move) -> usize {
-    let stm = board.side_to_move();
-    let to = if is_cozy_castle(board, mv) {
+/// Destination square in standard notation: for castling, the king's landing
+/// square (g1/c1/g8/c8) instead of cozy-chess's rook square.
+pub fn standard_to(board: &Board, mv: Move) -> Square {
+    if is_cozy_castle(board, mv) {
         let file = if mv.to.file() > mv.from.file() { File::G } else { File::C };
         Square::new(file, mv.from.rank())
     } else {
         mv.to
-    };
+    }
+}
+
+/// Map a legal move on `board` to its canonical policy index in `0..NUM_MOVES`.
+pub fn move_to_index(board: &Board, mv: Move) -> usize {
+    let stm = board.side_to_move();
+    let to = standard_to(board, mv);
     let from_c = canon_sq(mv.from, stm);
     let to_c = canon_sq(to, stm);
     match mv.promotion {

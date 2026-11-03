@@ -1,6 +1,9 @@
-//! Chess engine core: board wrapper, canonical encoders and CLI tools.
-//! See SPEC.md for every on-disk / on-tensor contract.
+//! Chess engine core: board wrapper, canonical encoders, NN inference, MCTS,
+//! UCI and CLI tools. See SPEC.md for every on-disk / on-tensor contract.
 
 pub mod board;
 pub mod cli;
 pub mod encoder;
+pub mod mcts;
+pub mod nn;
+pub mod uci;
