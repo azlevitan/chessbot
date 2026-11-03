@@ -28,11 +28,7 @@ impl BatchOptions {
     pub fn validate(&self, cfg: &SelfPlayConfig) -> Result<()> {
         ensure!(self.parallel > 0, "--parallel must be positive");
         ensure!(self.leaf_batch > 0, "--leaf-batch must be positive");
-        ensure!(
-            cfg.sims >= 2,
-            "selfplay needs at least 2 simulations per move"
-        );
-        Ok(())
+        cfg.validate()
     }
 }
 

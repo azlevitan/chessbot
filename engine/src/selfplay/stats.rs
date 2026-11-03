@@ -1,4 +1,4 @@
-//! Self-play sidecar counters; resignation remains disabled until Phase 7.5.
+//! Self-play result, termination, and resignation-audit counters.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -28,11 +28,21 @@ pub struct SelfPlayStats {
     games: u64,
     results: Results,
     terminations: Terminations,
+    playthrough_games: u64,
+    false_positives: u64,
 }
 
 impl SelfPlayStats {
     pub fn record(&mut self, game: &GameRecord) {
         self.games += 1;
+        if game.playthrough {
+            self.playthrough_games += 1;
+            if let Some(side) = game.would_resign {
+                if game.result != GameResult::win_for(!side) {
+                    self.false_positives += 1;
+                }
+            }
+        }
         match game.result {
             GameResult::WhiteWins => self.results.white += 1,
             GameResult::BlackWins => self.results.black += 1,
@@ -40,6 +50,7 @@ impl SelfPlayStats {
         }
         match game.termination {
             Termination::Checkmate => self.terminations.checkmate += 1,
+            Termination::Resign => self.terminations.resign += 1,
             Termination::RuleDraw => self.terminations.rule_draw += 1,
             Termination::Repetition => self.terminations.repetition += 1,
             Termination::InsufficientMaterial => self.terminations.insufficient_material += 1,
@@ -53,8 +64,9 @@ impl SelfPlayStats {
             "seed": seed, "sims": cfg.sims, "max_plies": cfg.max_plies,
             "temp_plies": cfg.temp_plies, "results": self.results,
             "terminations": self.terminations,
-            "resign": { "threshold": -1.0, "consecutive": 0,
-                        "playthrough_games": 0, "false_positives": 0 }
+            "resign": { "threshold": cfg.resign_threshold, "consecutive": cfg.resign_consecutive,
+                        "playthrough_games": self.playthrough_games,
+                        "false_positives": self.false_positives }
         })
     }
 }

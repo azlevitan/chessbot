@@ -4,6 +4,7 @@
 pub mod batch_runner;
 pub mod driver;
 pub mod game;
+pub mod resign;
 pub mod stats;
 
 pub use game::{play_game, GameRecord, PlyRecord, SelfPlayConfig, Termination};

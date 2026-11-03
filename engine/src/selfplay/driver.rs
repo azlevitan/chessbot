@@ -4,8 +4,10 @@ use anyhow::{ensure, Result};
 use cozy_chess::{Board, Move};
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::rngs::StdRng;
+use rand::Rng;
 
 use super::game::game_over;
+use super::resign::ResignTracker;
 use super::{GameRecord, PlyRecord, SelfPlayConfig, Termination};
 use crate::cli::bin_writer::GameResult;
 use crate::encoder::move_mapper::move_to_index;
@@ -22,14 +24,14 @@ pub struct GameDriver {
     plies: Vec<PlyRecord>,
     move_start: u32,
     finished: Option<(GameResult, Termination)>,
+    resign: ResignTracker,
 }
 
 impl GameDriver {
-    pub fn new(cfg: &SelfPlayConfig, rng: StdRng) -> Result<Self> {
-        ensure!(
-            cfg.sims >= 2,
-            "selfplay needs at least 2 simulations per move"
-        );
+    pub fn new(cfg: &SelfPlayConfig, mut rng: StdRng) -> Result<Self> {
+        cfg.validate()?;
+        // Exactly one draw before any search, including when resignation is disabled.
+        let playthrough = rng.gen::<f32>() < cfg.resign_playthrough;
         let board = Board::default();
         let history = vec![board.hash()];
         Ok(Self {
@@ -41,6 +43,7 @@ impl GameDriver {
             rng,
             plies: Vec::new(),
             move_start: 0,
+            resign: ResignTracker::new(cfg.resign_threshold, cfg.resign_consecutive, playthrough),
         })
     }
 
@@ -79,19 +82,27 @@ impl GameDriver {
             .iter()
             .map(|c| (c.mv, c.visits as f32 / total as f32))
             .collect();
-        let played = choose_move(
-            &self.board,
-            &result.root_children,
-            self.plies.len() as u32,
-            self.cfg.temp_plies,
-            &mut self.rng,
-        );
+        let played = if let Some(side) = self.resign.update(self.board.side_to_move(), result.root_q) {
+            self.finished = Some((GameResult::win_for(!side), Termination::Resign));
+            None
+        } else {
+            Some(choose_move(
+                &self.board,
+                &result.root_children,
+                self.plies.len() as u32,
+                self.cfg.temp_plies,
+                &mut self.rng,
+            ))
+        };
         self.plies.push(PlyRecord {
             board: self.board.clone(),
             policy,
             root_q: result.root_q,
             played,
         });
+        let Some(played) = played else {
+            return Ok(());
+        };
         self.board.play_unchecked(played);
         self.history.push(self.board.hash());
         self.finished = game_over(
@@ -117,6 +128,8 @@ impl GameDriver {
             plies: self.plies,
             result,
             termination,
+            playthrough: self.resign.is_playthrough(),
+            would_resign: self.resign.would_resign(),
         }
     }
 }

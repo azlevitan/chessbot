@@ -113,8 +113,10 @@ fn uniform_selfplay_writes_metadata_and_preserves_determinism() {
             assert_eq!(meta[key].as_object().unwrap().values().map(|v| v.as_u64().unwrap()).sum::<u64>(), 2);
         }
         assert_eq!(meta["terminations"]["resign"], 0);
-        assert_eq!(meta["resign"], json!({"threshold": -1.0, "consecutive": 0,
-            "playthrough_games": 0, "false_positives": 0}));
+        assert_eq!(meta["resign"]["threshold"], json!(-0.95f32));
+        assert_eq!(meta["resign"]["consecutive"], 3);
+        assert_eq!(meta["resign"]["false_positives"], 0);
+        assert!(meta["resign"]["playthrough_games"].as_u64().unwrap() <= 2);
     }
     assert_eq!(fs::read(dir.0.join("a.bin")).unwrap(), fs::read(dir.0.join("b.bin")).unwrap());
     assert_eq!(sidecar(&dir.0.join("a.bin")), sidecar(&dir.0.join("b.bin")));

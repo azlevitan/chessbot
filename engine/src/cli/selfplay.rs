@@ -1,6 +1,7 @@
 //! `engine selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
 //!  [--seed S] [--max-plies P] [--temp-plies T] [--no-reuse] [--ep auto|cpu|coreml] [--threads T]
-//!  [--parallel P] [--leaf-batch K]`
+//!  [--parallel P] [--leaf-batch K]
+//!  [--resign-threshold -0.95] [--resign-consecutive 3] [--resign-playthrough 0.1]`
 //!
 //! Root Dirichlet noise (alpha = 0.3, eps = 0.25) at every move. Each game is
 //! flushed in game-index order; game `i` uses seed `S + i`.
@@ -63,6 +64,9 @@ pub fn parse_args(args: &[String]) -> Result<SelfPlayArgs> {
             "--temp-plies" => cfg.temp_plies = parse_num(&mut it, "--temp-plies")?,
             "--parallel" => batch.parallel = parse_num(&mut it, "--parallel")?,
             "--leaf-batch" => batch.leaf_batch = parse_num(&mut it, "--leaf-batch")?,
+            "--resign-threshold" => cfg.resign_threshold = parse_num(&mut it, arg)?,
+            "--resign-consecutive" => cfg.resign_consecutive = parse_num(&mut it, arg)?,
+            "--resign-playthrough" => cfg.resign_playthrough = parse_num(&mut it, arg)?,
             "--no-reuse" => cfg.reuse = false,
             other => bail!("unknown argument for selfplay: {other}"),
         }
