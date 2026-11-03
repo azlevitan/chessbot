@@ -19,6 +19,7 @@ commands:
                                      PGN games -> supervised training samples
   selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
            [--seed S] [--max-plies 512] [--temp-plies 30] [--ep auto|cpu|coreml] [--threads T]
+           [--no-reuse]
                                      self-play with root Dirichlet noise";
 
 fn run_uci(args: &[String]) -> Result<()> {

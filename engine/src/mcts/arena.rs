@@ -84,6 +84,17 @@ impl Arena {
         self.capacity
     }
 
+    /// Copy a retained node without growing beyond the original arena budget.
+    pub(super) fn push_copy(&mut self, node: Node) -> usize {
+        assert!(
+            self.nodes.len() < self.capacity,
+            "compacted arena exceeds capacity"
+        );
+        let index = self.nodes.len();
+        self.nodes.push(node);
+        index
+    }
+
     /// Allocate children for `parent`; returns `false` (and changes nothing) if full.
     pub fn expand(&mut self, parent: usize, priors: &[(Move, f32)]) -> bool {
         assert!(priors.len() <= u8::MAX as usize, "too many children");

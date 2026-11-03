@@ -4,6 +4,7 @@ pub mod arena;
 mod batch;
 pub mod noise;
 mod result;
+mod reuse;
 pub mod search;
 pub mod tree;
 

@@ -8,23 +8,25 @@ use rand::rngs::StdRng;
 
 use crate::cli::bin_writer::GameResult;
 use crate::mcts::arena::MAX_NODES;
-use crate::mcts::{search_with_noise, RootNoise, SearchLimits};
+use crate::mcts::{RootNoise, SearchLimits, SearchTree};
 use crate::nn::Evaluator;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SelfPlayConfig {
-    /// MCTS simulations per move (>= 2: the first only expands the root).
+    /// New MCTS simulations per move (>= 2: a fresh root needs expansion).
     pub sims: u32,
     /// Game is adjudicated a draw after this many plies.
     pub max_plies: u32,
     /// Plies played by sampling from visit counts (temperature 1).
     pub temp_plies: u32,
     pub noise: RootNoise,
+    /// Retain the played child's subtree between moves.
+    pub reuse: bool,
 }
 
 impl Default for SelfPlayConfig {
     fn default() -> Self {
-        Self { sims: 200, max_plies: 512, temp_plies: 30, noise: RootNoise::default() }
+        Self { sims: 200, max_plies: 512, temp_plies: 30, noise: RootNoise::default(), reuse: true }
     }
 }
 
@@ -89,12 +91,13 @@ pub fn play_game(eval: &mut dyn Evaluator, cfg: &SelfPlayConfig, rng: &mut StdRn
     };
     let mut board = Board::default();
     let mut history = vec![board.hash()];
+    let mut tree = SearchTree::new(board.clone(), &history, MAX_NODES);
     let mut plies = Vec::new();
     loop {
         if let Some((result, termination)) = game_over(&board, &history, plies.len() as u32, cfg) {
             return Ok(GameRecord { plies, result, termination });
         }
-        let r = search_with_noise(&board, eval, limits, MAX_NODES, Some((&cfg.noise, &mut *rng)))?;
+        let r = tree.search(eval, limits, Some((&cfg.noise, &mut *rng)))?;
         let visits: Vec<u32> = r.root_children.iter().map(|c| c.visits).collect();
         let total: u32 = visits.iter().sum();
         ensure!(total > 0, "search produced no root visits");
@@ -112,5 +115,10 @@ pub fn play_game(eval: &mut dyn Evaluator, cfg: &SelfPlayConfig, rng: &mut StdRn
         plies.push(PlyRecord { board: board.clone(), policy, root_q: r.root_q, played });
         board.play_unchecked(played);
         history.push(board.hash());
+        if cfg.reuse {
+            tree.advance(played, board.clone(), &history);
+        } else {
+            tree = SearchTree::new(board.clone(), &history, MAX_NODES);
+        }
     }
 }

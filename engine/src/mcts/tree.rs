@@ -20,13 +20,14 @@ pub enum Leaf {
 /// Owns one arena and one active trajectory. The batch driver reserves paths
 /// separately while their evaluations are pending.
 pub struct SearchTree {
-    root: Board,
+    pub(super) root: Board,
     pub(super) arena: Arena,
-    history_hashes: HashSet<u64>,
+    pub(super) history_hashes: HashSet<u64>,
     pub(super) path: Vec<usize>,
     pub(super) path_hashes: Vec<u64>,
     pub(super) simulations: u32,
-    arena_full: bool,
+    pub(super) arena_full: bool,
+    pub(super) root_noise_applied: bool,
 }
 
 impl SearchTree {
@@ -40,6 +41,7 @@ impl SearchTree {
             path_hashes: Vec::with_capacity(64),
             simulations: 0,
             arena_full: false,
+            root_noise_applied: false,
         }
     }
 
@@ -145,14 +147,18 @@ impl SearchTree {
         self.path_hashes.clear();
     }
 
-    /// Called once after root expansion by the search driver.
+    /// Mix noise once per root, after expansion or immediately after reuse.
     pub fn apply_root_noise(&mut self, noise: &RootNoise, rng: &mut dyn RngCore) {
+        if self.root_noise_applied || self.arena[0].state != NodeState::Expanded {
+            return;
+        }
         let children = self.arena[0].children();
         let mut priors: Vec<_> = children.clone().map(|c| self.arena[c].prior).collect();
         noise.apply(&mut priors, rng);
         for (c, p) in children.zip(priors) {
             self.arena[c].prior = p;
         }
+        self.root_noise_applied = true;
     }
 
     /// A snapshot; it does not mutate or finish an outstanding selection.

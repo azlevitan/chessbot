@@ -1,5 +1,5 @@
 //! `engine selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
-//!  [--seed S] [--max-plies P] [--temp-plies T] [--ep auto|cpu|coreml] [--threads T]`
+//!  [--seed S] [--max-plies P] [--temp-plies T] [--no-reuse] [--ep auto|cpu|coreml] [--threads T]`
 //!
 //! Root Dirichlet noise (alpha = 0.3, eps = 0.25) at every move. Each game is
 //! flushed to disk as soon as it finishes; game `i` uses seed `S + i`.
@@ -53,6 +53,7 @@ pub fn parse_args(args: &[String]) -> Result<SelfPlayArgs> {
             "--seed" => seed = Some(parse_num(&mut it, "--seed")?),
             "--max-plies" => cfg.max_plies = parse_num(&mut it, "--max-plies")?,
             "--temp-plies" => cfg.temp_plies = parse_num(&mut it, "--temp-plies")?,
+            "--no-reuse" => cfg.reuse = false,
             other => bail!("unknown argument for selfplay: {other}"),
         }
     }
