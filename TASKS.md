@@ -102,7 +102,7 @@
     6. A `.bin` without `.json` and a stray `.tmp` are ignored.
     7. With weights `[0.25, 0.75]` over 4,000 draws, the source frequencies are within ±0.03.
     8. The same seed gives the same index sequence.
-- [ ] **6.4 `training/train.py`: streaming trainer with WDL/Q target blending & validation.**
+- [x] **6.4 `training/train.py`: streaming trainer with WDL/Q target blending & validation.**
   - Files: `training/losses.py` (update for `q_ratio`), `training/train.py` (new, CLI, ≤ 150 lines), `training/train_loop.py` (new: `train_steps`, `evaluate`, ≤ 200 lines), `training/schedule.py` (new: warmup + cosine to 10% LR), `training/pyproject.toml` (add the new `py-modules`), `training/tests/test_train.py` (new).
   - CLI:
     ~~~
