@@ -174,7 +174,7 @@
     1. `batch = 1` still equals the 7.1 golden lists.
     2. For `batch ∈ {4, 8, 16}` with `nodes 400`: root visits == simulations; every expanded node (root included) satisfies `visits == 1 + Σ child visits`, preserving 7.1's initial-root-expansion simulation (399 root-child visits at 400 simulations); no leftover virtual loss remains (`|value_sum| <= visits` on every edge); `arena.len() <= 65,536`; and the 3 GATE-4 mate-in-1 FENs are still solved.
     3. A counting evaluator shows `avg batch ≥ 6` at `batch 8` from startpos.
-- [ ] **7.3 Tree reuse (subtree compaction).**
+- [x] **7.3 Tree reuse (subtree compaction).**
   - Files: `engine/src/mcts/reuse.rs` (new: `SearchTree::advance(&mut self, mv: Move, new_board: Board, history_hashes: &[u64]) -> bool` copies the child's subtree BFS into a fresh arena, ≤ 65,536 nodes), `engine/src/mcts/tree.rs`, `engine/src/selfplay/game.rs` (reuse + §7 noise-on-reused-root + `--sims` = new playouts), `engine/src/cli/selfplay.rs` (`--no-reuse`), `engine/tests/reuse.rs` (new).
   - Test:
     1. After `advance(best, ...)`, the new root's visits equal the old child's visits.

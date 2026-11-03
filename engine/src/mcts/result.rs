@@ -24,6 +24,7 @@ pub struct SearchResult {
     /// Root value from the side to move's perspective.
     pub root_q: f32,
     pub pv: Vec<Move>,
+    /// Completed root visits, including visits retained by subtree reuse.
     pub simulations: u32,
     pub nodes_used: usize,
     pub arena_full: bool,

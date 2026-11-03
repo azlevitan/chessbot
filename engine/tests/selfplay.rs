@@ -13,7 +13,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 fn small_cfg() -> SelfPlayConfig {
-    SelfPlayConfig { sims: 24, max_plies: 60, temp_plies: 30, noise: RootNoise::default() }
+    SelfPlayConfig { sims: 24, max_plies: 60, temp_plies: 30, noise: RootNoise::default(), reuse: true }
 }
 
 #[test]
