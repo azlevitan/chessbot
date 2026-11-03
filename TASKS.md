@@ -32,5 +32,6 @@
 - [x] **GATE 4:** `python3 pipeline/test_uci_mate.py` exits with `0`.
 
 ## Phase 5: Supervised Bootstrapping & Self-Play RL Loop
-- [ ] Add `engine convert-pgn --input <pgn> --out <bin>` in Rust to rapidly convert PGN games into `.bin` training chunks.
-- [ ] Add `engine selfplay --model <onnx> --games <N> --sims 200 --out <bin>` with root Dirichlet noise (`alpha=0.3, eps=0.25`).
+- [x] Add `engine convert-pgn --input <pgn> --out <bin>` in Rust to rapidly convert PGN games into `.bin` training chunks.
+- [x] Add `engine selfplay --model <onnx> --games <N> --sims 200 --out <bin>` with root Dirichlet noise (`alpha=0.3, eps=0.25`).
+- [x] **GATE 5:** `cd engine && cargo test --release` and `pytest training/tests/test_pgn_contract.py` exit with `0`.

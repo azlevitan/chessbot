@@ -6,4 +6,6 @@ pub mod cli;
 pub mod encoder;
 pub mod mcts;
 pub mod nn;
+pub mod pgn;
+pub mod selfplay;
 pub mod uci;

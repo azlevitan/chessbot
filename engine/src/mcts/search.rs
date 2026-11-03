@@ -7,8 +7,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Result};
 use cozy_chess::{Board, GameStatus, Move};
+use rand::RngCore;
 
 use super::arena::{Arena, NodeState, MAX_NODES};
+use super::noise::RootNoise;
 use crate::board::legal_moves;
 use crate::nn::{evaluate_board, Evaluator};
 
@@ -96,6 +98,28 @@ pub fn search(
     limits: SearchLimits,
     capacity: usize,
 ) -> Result<SearchResult> {
+    search_with_noise(root, eval, limits, capacity, None)
+}
+
+/// Mix root Dirichlet noise into the root children's priors (right after the
+/// first simulation expands the root).
+fn noise_root(arena: &mut Arena, noise: &RootNoise, rng: &mut dyn RngCore) {
+    let children = arena[0].children();
+    let mut priors: Vec<f32> = children.clone().map(|c| arena[c].prior).collect();
+    noise.apply(&mut priors, rng);
+    for (c, p) in children.zip(priors) {
+        arena[c].prior = p;
+    }
+}
+
+/// `search`, optionally with root Dirichlet noise for self-play exploration.
+pub fn search_with_noise(
+    root: &Board,
+    eval: &mut dyn Evaluator,
+    limits: SearchLimits,
+    capacity: usize,
+    mut noise: Option<(&RootNoise, &mut dyn RngCore)>,
+) -> Result<SearchResult> {
     let mut arena = Arena::new(capacity.min(MAX_NODES));
     let mut arena_full = false;
     let root_moves = legal_moves(root).len();
@@ -133,6 +157,11 @@ pub fn search(
             v = -v;
         }
         sims += 1;
+        if sims == 1 {
+            if let Some((n, rng)) = noise.take() {
+                noise_root(&mut arena, n, rng);
+            }
+        }
     }
     Ok(build_result(&arena, sims, arena_full))
 }
