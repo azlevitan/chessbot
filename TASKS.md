@@ -127,7 +127,7 @@
     5. `--init` resumes from a given checkpoint.
     6. `val.policy_top1` is in `[0, 1]`.
   - RAM: model 36 MB + AdamW state 72 MB + batch 512 dense policy 8.5 MB + activations. Expected peak RSS ≤ 2 GB on MPS at batch 512.
-- [ ] **6.5 Run layout + supervised bootstrap script (generation 0).**
+- [x] **6.5 Run layout + supervised bootstrap script (generation 0).**
   - Files: `pipeline/pyproject.toml` (new: `[tool.pytest.ini_options] pythonpath=["."] testpaths=["tests"]`), `pipeline/run_layout.py` (new: path helpers for SPEC §10 plus `read_run_json`/`write_run_json` with atomic tmp+rename), `pipeline/bootstrap.py` (new), `pipeline/tests/conftest.py` (new: `engine_bin` fixture, repo paths), `pipeline/tests/test_bootstrap.py` (new).
   - CLI:
     ~~~
@@ -147,7 +147,7 @@
     2. `run.json` matches.
     3. `engine uci --model gens/gen_0000/model.onnx --ep cpu` answers `go nodes 32` with a legal `bestmove`.
     4. A second invocation is a no-op: the `model.pt` mtime is unchanged.
-- [ ] **GATE 6:** `cd engine && cargo test --release && cd .. && pytest training/tests/test_chunk_dataset.py training/tests/test_train.py && pytest pipeline/tests/test_bootstrap.py` exits with `0`.
+- [x] **GATE 6:** `cd engine && cargo test --release && cd .. && pytest training/tests/test_chunk_dataset.py training/tests/test_train.py && pytest pipeline/tests/test_bootstrap.py` exits with `0`.
 
 ## Phase 7: Search Throughput, Repetition & FPU (Batched MCTS, Tree Reuse, Parallel Self-Play)
 - [ ] **7.1 Refactor search into a resumable `SearchTree` + In-Tree Repetition + FPU.**
