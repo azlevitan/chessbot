@@ -150,7 +150,7 @@
 - [x] **GATE 6:** `cd engine && cargo test --release && cd .. && pytest training/tests/test_chunk_dataset.py training/tests/test_train.py && pytest pipeline/tests/test_bootstrap.py` exits with `0`.
 
 ## Phase 7: Search Throughput, Repetition & FPU (Batched MCTS, Tree Reuse, Parallel Self-Play)
-- [ ] **7.1 Refactor search into a resumable `SearchTree` + In-Tree Repetition + FPU.**
+- [x] **7.1 Refactor search into a resumable `SearchTree` + In-Tree Repetition + FPU.**
   - Files: `engine/src/mcts/tree.rs` (new), `engine/src/mcts/search.rs` (becomes a thin driver), `engine/src/mcts/mod.rs`, `engine/tests/mcts_golden.rs` (new).
   - API:
     - `SearchTree::new(root: Board, history_hashes: &[u64], capacity: usize) -> Self` (or `with_history`)

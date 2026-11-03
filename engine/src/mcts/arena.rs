@@ -42,9 +42,14 @@ impl Node {
         }
     }
 
-    /// Mean value from the parent's perspective; 0 for unvisited nodes (FPU).
+    /// Mean value from the parent's perspective; 0 when unvisited. Selection
+    /// applies its root/non-root FPU rule separately.
     pub fn q(&self) -> f32 {
-        if self.visits == 0 { 0.0 } else { self.value_sum / self.visits as f32 }
+        if self.visits == 0 {
+            0.0
+        } else {
+            self.value_sum / self.visits as f32
+        }
     }
 
     pub fn children(&self) -> std::ops::Range<usize> {
@@ -86,7 +91,8 @@ impl Arena {
             return false;
         }
         let first = self.nodes.len() as u32;
-        self.nodes.extend(priors.iter().map(|&(mv, p)| Node::new(Some(mv), p)));
+        self.nodes
+            .extend(priors.iter().map(|&(mv, p)| Node::new(Some(mv), p)));
         let node = &mut self.nodes[parent];
         node.first_child = first;
         node.num_children = priors.len() as u8;

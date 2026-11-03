@@ -77,6 +77,7 @@ pub struct TrainingSample {
 - At node `s`, pick legal child action `a` maximizing:
   `Q(s, a) + c_puct * P(s, a) * sqrt(N(s)) / (1 + N(s, a))`
   where `c_puct = 1.5`, and `Q(s, a)` is negated when backing up between alternating sides to move.
+- **First Play Urgency (FPU, Task 7.1):** For an unvisited child, use `Q = 0.0` at the root and `Q = (-parent_edge_q - 0.25).clamp(-1.0, 1.0)` elsewhere. The edge into the current node is scored from its parent's side to move, so negation converts it to the current side's perspective. Visited children use their measured Q.
 
 ## 6. Sample Chunks & Sidecars
 A **chunk** is a plain `.bin` file of back-to-back §3 `TrainingSample` records — no header, so §3 readers (`open_samples`, `ReplayBuffer`) work unchanged. Metadata lives in a JSON **sidecar** with the same stem (`chunk_000042.bin` ↔ `chunk_000042.json`).
@@ -194,6 +195,5 @@ A **chunk** is a plain `.bin` file of back-to-back §3 `TrainingSample` records 
 - **Tree reuse:** When a new `position` command extends the previous one by 1–2 plies, the matching subtree becomes the new root (§7 compaction). Otherwise the tree is reset. `ucinewgame` always resets it.
 
 ## Open Questions (do not act on without the owner's decision)
-- §5 leaves first-play urgency unspecified. The code uses `Q = 0` for unvisited children. Lc0-style FPU reduction would likely add strength but changes search behavior.
 - §4 requires the CoreML EP. §8 restricts CoreML to macOS so Linux gates can run. Confirm the `ort` `coreml` feature still compiles on Linux; if it does not, move it to a macOS-only target dependency.
 - CLAUDE.md quotes the arena as "~4MB" while `arena.rs` measures ~1.8 MB (28 B/node). The cap (65,536) is what matters; the number in the text is out of date.
