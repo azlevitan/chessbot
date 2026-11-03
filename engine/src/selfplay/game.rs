@@ -82,7 +82,11 @@ fn game_over(board: &Board, history: &[u64], ply: u32, cfg: &SelfPlayConfig) -> 
 /// Play one game from the standard start position.
 pub fn play_game(eval: &mut dyn Evaluator, cfg: &SelfPlayConfig, rng: &mut StdRng) -> Result<GameRecord> {
     ensure!(cfg.sims >= 2, "selfplay needs at least 2 simulations per move");
-    let limits = SearchLimits { nodes: Some(cfg.sims), movetime: None };
+    let limits = SearchLimits {
+        nodes: Some(cfg.sims),
+        movetime: None,
+        ..SearchLimits::default()
+    };
     let mut board = Board::default();
     let mut history = vec![board.hash()];
     let mut plies = Vec::new();

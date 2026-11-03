@@ -1,4 +1,4 @@
-//! Resumable, sequential MCTS. Evaluation happens outside the tree.
+//! Resumable MCTS. Evaluation happens outside the tree.
 
 use std::collections::HashSet;
 
@@ -17,14 +17,15 @@ pub enum Leaf {
     NeedsEval { node: usize, board: Board },
 }
 
-/// Owns one arena and one outstanding selection, retained across evaluation.
+/// Owns one arena and one active trajectory. The batch driver reserves paths
+/// separately while their evaluations are pending.
 pub struct SearchTree {
     root: Board,
-    arena: Arena,
+    pub(super) arena: Arena,
     history_hashes: HashSet<u64>,
-    path: Vec<usize>,
-    path_hashes: Vec<u64>,
-    simulations: u32,
+    pub(super) path: Vec<usize>,
+    pub(super) path_hashes: Vec<u64>,
+    pub(super) simulations: u32,
     arena_full: bool,
 }
 

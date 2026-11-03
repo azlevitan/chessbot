@@ -31,6 +31,7 @@ fn snapshot(fen: &str) -> String {
         SearchLimits {
             nodes: Some(300),
             movetime: None,
+            ..SearchLimits::default()
         },
         MAX_NODES,
         Some((&RootNoise::default(), &mut StdRng::seed_from_u64(1))),
@@ -108,6 +109,7 @@ fn pausing_between_selections_and_evaluation_matches_the_sequential_driver() {
             SearchLimits {
                 nodes: Some(300),
                 movetime: None,
+                ..SearchLimits::default()
             },
             MAX_NODES,
             Some((&RootNoise::default(), &mut StdRng::seed_from_u64(1))),

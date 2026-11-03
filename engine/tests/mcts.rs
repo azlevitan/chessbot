@@ -19,7 +19,11 @@ const MATES: [(&str, &[&str]); 3] = [
 ];
 
 fn nodes(n: u32) -> SearchLimits {
-    SearchLimits { nodes: Some(n), movetime: None }
+    SearchLimits {
+        nodes: Some(n),
+        movetime: None,
+        ..SearchLimits::default()
+    }
 }
 
 /// Always reports the same WDL for the side to move: p = [0.2, 0.2, 0.6] -> v = +0.4.

@@ -112,6 +112,7 @@ A **chunk** is a plain `.bin` file of back-to-back §3 `TrainingSample` records 
 
 ## 8. Batched Search & Benchmark
 - **Batch size `B`** (`SearchLimits.batch`, default `1`). `B = 1` MUST reproduce the pre-batching search exactly (same visits for the same evaluator).
+- **Visit accounting:** Initial root expansion counts as one simulation, preserving Task 7.1's golden baseline. On a fresh, expanded tree, `root.visits == simulations` and every expanded node (root included) has `visits == 1 + sum(child.visits)`. Thus 400 simulations give 399 root-child visits. Pending virtual losses are excluded from completed simulations and fully removed before returning a result.
 - **Virtual loss:** When a leaf is selected for evaluation, every node on its path (root excluded) gets `visits += 1` and `value_sum -= 1.0` (a loss from the perspective of the side that chose that node). When the batch's results arrive, each path first undoes its virtual loss and then applies the normal §5 alternating backup.
 - **Gathering:** Up to `min(B, remaining sims)` leaves are gathered per evaluator call. Terminal leaves are backed up at once and count as simulations. A path that reaches a leaf already pending in this batch is a *collision*: undo its virtual loss and stop gathering for this batch.
 - **Multi-game batching (selfplay/match):** Each of `P` concurrent games contributes its pending leaves to **one** evaluator call per step. Each game's tree has its own arena (≤ 65,536 nodes ≈ 1.8 MB).

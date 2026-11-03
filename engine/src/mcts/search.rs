@@ -2,26 +2,39 @@
 
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use cozy_chess::Board;
 use rand::RngCore;
 
 use super::arena::MAX_NODES;
+use super::batch::search_batch;
 use super::noise::RootNoise;
-use super::tree::{Leaf, SearchTree};
+use super::tree::SearchTree;
 use crate::board::legal_moves;
-use crate::nn::{evaluate_board, Evaluator};
+use crate::nn::Evaluator;
 
 pub const C_PUCT: f32 = 1.5;
 /// Simulations used when `go` gives neither `nodes` nor `movetime`.
 pub const DEFAULT_NODES: u32 = 800;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct SearchLimits {
     /// Maximum number of simulations.
     pub nodes: Option<u32>,
-    /// Wall-clock budget, checked between simulations.
+    /// Wall-clock budget, checked between batches.
     pub movetime: Option<Duration>,
+    /// Maximum leaves per evaluator call. One preserves sequential search.
+    pub batch: usize,
+}
+
+impl Default for SearchLimits {
+    fn default() -> Self {
+        Self {
+            nodes: None,
+            movetime: None,
+            batch: 1,
+        }
+    }
 }
 
 pub use super::result::{ChildStats, SearchResult};
@@ -44,6 +57,7 @@ pub fn search_with_noise(
     capacity: usize,
     mut noise: Option<(&RootNoise, &mut dyn RngCore)>,
 ) -> Result<SearchResult> {
+    ensure!(limits.batch > 0, "search batch must be positive");
     let capacity = capacity.clamp(1, MAX_NODES);
     let mut tree = SearchTree::new(root.clone(), &[], capacity);
     let root_moves = legal_moves(root).len();
@@ -57,6 +71,7 @@ pub fn search_with_noise(
         SearchLimits {
             nodes: None,
             movetime: None,
+            ..
         } => DEFAULT_NODES,
         SearchLimits { nodes, .. } => nodes.unwrap_or(u32::MAX),
     };
@@ -67,17 +82,8 @@ pub fn search_with_noise(
             .movetime
             .is_some_and(|t| sims > 0 && start.elapsed() >= t)
     {
-        match tree.select_leaf() {
-            Leaf::Terminal(value) => {
-                let path = tree.selected_path().to_vec();
-                tree.backup_terminal(&path, value);
-            }
-            Leaf::NeedsEval { node, board } => {
-                let (priors, value) = evaluate_board(eval, &board)?;
-                tree.expand_and_backup(node, &priors, value);
-            }
-        }
-        sims += 1;
+        let budget = limits.batch.min((max_sims - sims) as usize);
+        sims += search_batch(&mut tree, eval, budget)?;
         if sims == 1 {
             if let Some((n, rng)) = noise.take() {
                 tree.apply_root_noise(n, rng);
