@@ -11,10 +11,10 @@
   2. Every legal move across 1,000 random playout positions maps to a unique index in `0..4168` and roundtrips back to the identical `cozy_chess::Move`.
 
 ## Phase 2: Python Memmap Reader & Cross-Language Contract Verification
-- [ ] Set up `training/` with `pyproject.toml` (`torch`, `numpy`, `onnx`, `onnxruntime`, `pytest`, `chess`).
-- [ ] Implement `training/data/replay_buffer.py`: `np.memmap` Dataset reading `TrainingSample` (`492` bytes) and unpacking `18x8x8` planes + `4168` dense policy target + WDL label.
-- [ ] Write `training/tests/test_contract.py` that runs `engine dump-test-vectors`, reads the resulting `.bin` file in Python, and asserts exact plane values, castling flags, and move indices against `python-chess`.
-- [ ] **GATE 2:** `pytest training/tests/test_contract.py` exits with `0`.
+- [x] Set up `training/` with `pyproject.toml` (`torch`, `numpy`, `onnx`, `onnxruntime`, `pytest`, `chess`).
+- [x] Implement `training/data/replay_buffer.py`: `np.memmap` Dataset reading `TrainingSample` (`492` bytes) and unpacking `18x8x8` planes + `4168` dense policy target + WDL label.
+- [x] Write `training/tests/test_contract.py` that runs `engine dump-test-vectors`, reads the resulting `.bin` file in Python, and asserts exact plane values, castling flags, and move indices against `python-chess`.
+- [x] **GATE 2:** `pytest training/tests/test_contract.py` exits with `0`.
 
 ## Phase 3: SE-ResNet-6x64 Architecture, MPS Training & ONNX Export
 - [ ] Implement `training/models/net.py` (`SE-ResNet-6x64` matching `SPEC.md`).
