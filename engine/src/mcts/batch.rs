@@ -6,7 +6,7 @@ use anyhow::Result;
 use cozy_chess::Board;
 
 use super::tree::{Leaf, SearchTree};
-use crate::nn::{evaluate_boards, Evaluator};
+use crate::nn::{evaluate_boards, BoardEvaluation, Evaluator};
 
 /// Complete at most `budget` simulations. Terminals count toward the budget
 /// without occupying evaluator slots; collisions finish the current gather.
@@ -17,29 +17,15 @@ pub(super) fn search_batch(
 ) -> Result<u32> {
     assert!(budget > 0);
     let before = tree.simulations;
-    let mut batch = PendingBatch {
-        tree,
-        paths: VecDeque::new(),
-        boards: Vec::new(),
-        nodes: HashSet::new(),
-        // No temporary arithmetic at batch 1: preserve sequential results exactly.
-        virtual_loss: budget > 1,
-    };
-    batch.gather(budget);
-    let outputs = evaluate_boards(eval, &batch.boards)?;
-    for (priors, value) in outputs {
-        let path = batch.paths.pop_front().expect("one path per output");
-        batch.undo(&path);
-        let node = *path.last().unwrap();
-        batch.tree.path = path;
-        batch.tree.expand_and_backup(node, &priors, value);
-    }
-    Ok(batch.tree.simulations - before)
+    let batch = PendingBatch::new(tree, budget);
+    let outputs = evaluate_boards(eval, batch.boards())?;
+    batch.complete(&mut outputs.into_iter());
+    Ok(tree.simulations - before)
 }
 
 /// Dropping this guard also rolls back on inference/validation failure. Completed
 /// terminal backups remain real simulations; pending selections never count.
-struct PendingBatch<'a> {
+pub(crate) struct PendingBatch<'a> {
     tree: &'a mut SearchTree,
     paths: VecDeque<Vec<usize>>,
     boards: Vec<Board>,
@@ -47,7 +33,36 @@ struct PendingBatch<'a> {
     virtual_loss: bool,
 }
 
-impl PendingBatch<'_> {
+impl<'a> PendingBatch<'a> {
+    pub(crate) fn new(tree: &'a mut SearchTree, budget: usize) -> Self {
+        assert!(budget > 0);
+        let mut batch = Self {
+            tree,
+            paths: VecDeque::new(),
+            boards: Vec::new(),
+            nodes: HashSet::new(),
+            // No temporary arithmetic at batch 1: preserve sequential results exactly.
+            virtual_loss: budget > 1,
+        };
+        batch.gather(budget);
+        batch
+    }
+
+    pub(crate) fn boards(&self) -> &[Board] {
+        &self.boards
+    }
+
+    /// Consume this tree's prefix of an already validated combined output batch.
+    pub(crate) fn complete(mut self, outputs: &mut impl Iterator<Item = BoardEvaluation>) {
+        while let Some(path) = self.paths.pop_front() {
+            let (priors, value) = outputs.next().expect("one output per pending path");
+            self.undo(&path);
+            let node = *path.last().unwrap();
+            self.tree.path = path;
+            self.tree.expand_and_backup(node, &priors, value);
+        }
+    }
+
     fn gather(&mut self, budget: usize) {
         let mut terminals = 0;
         while terminals + self.paths.len() < budget {

@@ -183,7 +183,7 @@
     4. Selfplay with reuse (seed 9, `--sims 16`, 1 game, `--max-plies 30`) is deterministic across two runs, and every sample's policy sums to 1 ± 1e-5.
     5. Root visits after a reused search are `≥ sims`.
   - RAM: 2 arenas briefly during compaction (≈ 3.6 MB).
-- [ ] **7.4 Lock-step multi-game self-play (`--parallel P`) + Temperature Schedule.**
+- [x] **7.4 Lock-step multi-game self-play (`--parallel P`) + Temperature Schedule.**
   - Files: `engine/src/selfplay/driver.rs` (new: `GameDriver` = one game's board, history, tree, RNG and plies; `step_request()` / `step_apply()`), `engine/src/selfplay/batch_runner.rs` (new: runs `P` drivers, one `evaluate` call per step over all pending leaves, writes finished games in index order), `engine/src/selfplay/game.rs` (`play_game` = `P=1` runner), `engine/src/cli/selfplay.rs` (`--parallel P` default 16, `--leaf-batch K` default 1, `--temp-plies T` default 30), `engine/tests/selfplay_parallel.rs` (new).
   - **Move Selection Temperature Schedule:**
     - Regardless of temperature, the **training policy target** written to `TrainingSample.policy` is always the normalized root visit counts `N(r, a) / Σ_b N(r, b)`.
@@ -192,6 +192,7 @@
     1. With `UniformEvaluator`, 4 games, `--sims 16 --max-plies 40 --temp-plies 10 --seed 11`, `--parallel 4` and `--parallel 1` produce **byte-identical** `.bin` and identical sidecar `results`.
     2. With `--temp-plies 0`, the played move at every ply equals the argmax of the saved `TrainingSample.policy`.
   - RAM: `P = 32` → 32 trees × ≤ 3.6 MB + ORT batch I/O (32 × 4168 × 4 B ≈ 0.5 MB) ≈ 120 MB. The selfplay process stays ≤ 600 MB including the ORT/CoreML runtime.
+  - Verified on Linux CPU: `cd engine && cargo test --release` (90 tests) and `python3 pipeline/test_uci_mate.py` (3/3 mates) exit 0. Tests cover byte-identical chunks/sidecars at P=1/3/4 with K=1/4 and both reuse modes, greedy saved-policy argmax, combined inference routing, exact new-simulation budgets, and failure recovery. P=32 peak-RSS smoke checks: uniform (200 sims, 128-ply cap) 17.2 MiB; available ONNX model (8 sims, 4-ply cap) 89.3 MiB. CoreML RSS remains unverified on this Linux host.
 - [ ] **7.5 Resignation with playthrough audit (SPEC §7).**
   - Files: `engine/src/selfplay/resign.rs` (new: `ResignTracker { threshold, consecutive, playthrough }`; `update(stm: Color, root_q: f32) -> Option<Color>` returns the resigner; `would_resign` recorded in playthrough games), `engine/src/selfplay/driver.rs`, `engine/src/selfplay/stats.rs`, `engine/src/cli/selfplay.rs` (`--resign-threshold -0.95 --resign-consecutive 3 --resign-playthrough 0.1`), `engine/tests/resign.rs` (new).
   - Test (pure logic):
