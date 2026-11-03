@@ -17,11 +17,11 @@
 - [x] **GATE 2:** `pytest training/tests/test_contract.py` exits with `0`.
 
 ## Phase 3: SE-ResNet-6x64 Architecture, MPS Training & ONNX Export
-- [ ] Implement `training/models/net.py` (`SE-ResNet-6x64` matching `SPEC.md`).
-- [ ] Implement `training/losses.py`: Cross-Entropy on masked `policy_logits` + Cross-Entropy on `wdl_logits`.
-- [ ] Implement `training/export_onnx.py` to export a `.pt` checkpoint to `.onnx` and verify inference output parity with `onnxruntime`.
-- [ ] Write `training/tests/test_overfit.py`: trains on a single synthetic batch of 16 positions for 80 steps on `mps` (or `cpu` fallback) and asserts total loss drops below `0.05` and exported ONNX outputs match PyTorch within `1e-4`.
-- [ ] **GATE 3:** `pytest training/tests/test_overfit.py` exits with `0`.
+- [x] Implement `training/models/net.py` (`SE-ResNet-6x64` matching `SPEC.md`).
+- [x] Implement `training/losses.py`: Cross-Entropy on masked `policy_logits` + Cross-Entropy on `wdl_logits`.
+- [x] Implement `training/export_onnx.py` to export a `.pt` checkpoint to `.onnx` and verify inference output parity with `onnxruntime`.
+- [x] Write `training/tests/test_overfit.py`: trains on a single synthetic batch of 16 positions for 80 steps on `mps` (or `cpu` fallback) and asserts total loss drops below `0.05` and exported ONNX outputs match PyTorch within `1e-4`.
+- [x] **GATE 3:** `pytest training/tests/test_overfit.py` exits with `0`.
 
 ## Phase 4: Rust ONNX Inference, Arena MCTS & UCI Loop
 - [ ] Add `ort = { version = "2.0.0-rc.15", features = ["coreml"] }` to `engine/Cargo.toml`.
