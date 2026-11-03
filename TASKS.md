@@ -167,12 +167,12 @@
     1. Determinism test (`engine/tests/mcts_golden.rs`): record root child `(uci, visits)` lists for startpos, Kiwipete, and the scholar's-mate FEN with `UniformEvaluator`, `nodes 300`, and noise seed 1. Two runs must match identically.
     2. Repetition test: in `7k/8/8/8/8/8/8/K5Q1 w - - 0 1` after moves `g1g2 h8h7 g2g1 h7h8` (passed as `history_hashes`), searching `nodes 200` marks root child `g1g2` with `terminal == Some(0.0)` and avoids picking `g1g2` when winning alternatives exist.
     3. `engine/tests/mcts.rs` and `GATE 4` must stay green.
-- [ ] **7.2 Virtual-loss batched leaf evaluation within one tree (SPEC §8).**
+- [x] **7.2 Virtual-loss batched leaf evaluation within one tree (SPEC §8).**
   - Files: `engine/src/mcts/tree.rs`, `engine/src/mcts/batch.rs` (new: gather/collision/undo logic), `engine/src/mcts/search.rs` (`SearchLimits.batch: usize`, default 1), `engine/src/nn/mod.rs` (add `evaluate_boards(eval, &[Board]) -> Result<Vec<(Vec<(Move,f32)>, f32)>>`, one `evaluate` call), `engine/tests/mcts_batch.rs` (new).
   - **Virtual Loss Sign Rule:** When a trajectory selects a leaf for batch evaluation, apply virtual loss along every edge on the path (`visits += 1`, `value_sum -= 1.0` from the choosing node's perspective so `Q` temporarily drops and subsequent in-batch selections diversify). When `expand_and_backup` (or collision/terminal undo) runs, remove the virtual loss (`visits -= 1`, `value_sum += 1.0`) before applying the real backup (`visits += 1`, `value_sum += v`).
   - Test:
     1. `batch = 1` still equals the 7.1 golden lists.
-    2. For `batch ∈ {4, 8, 16}` with `nodes 400`: root visits == simulations; every expanded node satisfies `visits == 1 + Σ child visits` (or `== Σ` for the root); no leftover virtual loss remains (`|value_sum| <= visits` on every edge); `arena.len() <= 65,536`; and the 3 GATE-4 mate-in-1 FENs are still solved.
+    2. For `batch ∈ {4, 8, 16}` with `nodes 400`: root visits == simulations; every expanded node (root included) satisfies `visits == 1 + Σ child visits`, preserving 7.1's initial-root-expansion simulation (399 root-child visits at 400 simulations); no leftover virtual loss remains (`|value_sum| <= visits` on every edge); `arena.len() <= 65,536`; and the 3 GATE-4 mate-in-1 FENs are still solved.
     3. A counting evaluator shows `avg batch ≥ 6` at `batch 8` from startpos.
 - [ ] **7.3 Tree reuse (subtree compaction).**
   - Files: `engine/src/mcts/reuse.rs` (new: `SearchTree::advance(&mut self, mv: Move, new_board: Board, history_hashes: &[u64]) -> bool` copies the child's subtree BFS into a fresh arena, ≤ 65,536 nodes), `engine/src/mcts/tree.rs`, `engine/src/selfplay/game.rs` (reuse + §7 noise-on-reused-root + `--sims` = new playouts), `engine/src/cli/selfplay.rs` (`--no-reuse`), `engine/tests/reuse.rs` (new).

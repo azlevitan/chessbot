@@ -33,7 +33,11 @@ fn dirichlet_noise_keeps_a_distribution() {
 #[test]
 fn noisy_search_perturbs_root_priors_only_when_asked() {
     let board = Board::default();
-    let limits = SearchLimits { nodes: Some(50), movetime: None };
+    let limits = SearchLimits {
+        nodes: Some(50),
+        movetime: None,
+        ..SearchLimits::default()
+    };
     let plain = search(&board, &mut UniformEvaluator, limits, MAX_NODES).unwrap();
     assert!(plain.root_children.iter().all(|c| (c.prior - 0.05).abs() < 1e-6));
     let mut rng = StdRng::seed_from_u64(1);
