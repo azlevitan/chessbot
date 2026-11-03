@@ -20,6 +20,13 @@ A hybrid Rust + PyTorch deep learning chess engine (AlphaZero/Leela style) engin
 - Run Cross-Language Contract Gate: `pytest training/tests/test_contract.py`
 - Run Single-Batch Overfit Gate: `pytest training/tests/test_overfit.py`
 - Run Engine UCI Smoke Test: `python3 pipeline/test_uci_mate.py`
+- GATE 5 (PGN contract): `cd engine && cargo test --release && cd .. && pytest training/tests/test_pgn_contract.py`
+- GATE 6 (chunks, trainer, gen-0 bootstrap): `cd engine && cargo test --release && cd .. && pytest training/tests/test_chunk_dataset.py training/tests/test_train.py && pytest pipeline/tests/test_bootstrap.py`
+- GATE 7 (search throughput): `cd engine && cargo test --release && cd .. && python3 pipeline/bench_gate.py`
+- GATE 8 (match, Elo/SPRT): `cd engine && cargo test --release && cd .. && pytest pipeline/tests/test_elo.py pipeline/tests/test_evaluate.py`
+- GATE 9 (resumable RL loop): `pytest pipeline/tests/test_window.py pipeline/tests/test_stages.py pipeline/tests/test_loop.py pipeline/tests/test_prune.py pipeline/tests/test_report.py`
+- GATE 10 (UCI polish, calibration): `cd engine && cargo test --release && cd .. && python3 pipeline/test_uci_mate.py && python3 pipeline/test_uci_protocol.py && pytest pipeline/tests/test_calibrate.py`
+- All gates must pass on a Linux CPU box (no MPS/CoreML). `training/` tests run under `training/pyproject.toml`; `pipeline/tests/` run under `pipeline/pyproject.toml` (created in Task 6.5).
 
 ## Workflow Rules
 - Complete ONLY the current task requested from `TASKS.md`.
