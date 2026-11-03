@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler, default_collate
 
 SAMPLE_BYTES = 492
 NUM_MOVES = 4168
@@ -100,6 +100,23 @@ def unpack_policy(rec: np.void) -> tuple[np.ndarray, np.ndarray]:
     return dense, mask
 
 
+def sample_to_tensors(rec: np.void) -> dict[str, torch.Tensor]:
+    """Decode one record, retaining ``q`` as an alias for ``q_value``."""
+    value = float(rec["q_value"])
+    if not np.isfinite(value) or not -1.0 <= value <= 1.0:
+        raise ValueError("q_value must be finite and in [-1, 1]")
+    policy, legal_mask = unpack_policy(rec)
+    q_value = torch.tensor(value, dtype=torch.float32)
+    return {
+        "planes": torch.from_numpy(unpack_planes(rec)),
+        "policy": torch.from_numpy(policy),
+        "legal_mask": torch.from_numpy(legal_mask),
+        "wdl": torch.tensor(int(rec["outcome_wdl"]), dtype=torch.int64),
+        "q": q_value,
+        "q_value": q_value,
+    }
+
+
 class ReplayBuffer(Dataset):
     """Torch ``Dataset`` over one ``.bin`` file; each item is sliced lazily."""
 
@@ -115,23 +132,24 @@ class ReplayBuffer(Dataset):
         return self._samples[idx]
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        rec = self._samples[idx]
-        policy, legal_mask = unpack_policy(rec)
-        return {
-            "planes": torch.from_numpy(unpack_planes(rec)),
-            "policy": torch.from_numpy(policy),
-            "legal_mask": torch.from_numpy(legal_mask),
-            "wdl": torch.tensor(int(rec["outcome_wdl"]), dtype=torch.int64),
-            "q": torch.tensor(float(rec["q_value"]), dtype=torch.float32),
-        }
+        return sample_to_tensors(self._samples[idx])
 
 
-def make_loader(dataset: Dataset, batch_size: int, shuffle: bool = True) -> DataLoader:
+def collate_samples(samples) -> dict[str, torch.Tensor]:
+    """Pass through batched dataset results; stack ordinary sample lists."""
+    return samples if isinstance(samples, dict) else default_collate(samples)
+
+
+def make_loader(
+    dataset: Dataset, batch_size: int, shuffle: bool = True, *, sampler: Sampler[int] | None = None,
+) -> DataLoader:
     """DataLoader with the 8GB-M1 guardrails baked in (CLAUDE.md Law 2)."""
     return DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
+        shuffle=shuffle if sampler is None else False,
+        sampler=sampler,
+        collate_fn=collate_samples,
         num_workers=0,
         pin_memory=False,
     )
