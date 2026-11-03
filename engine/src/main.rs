@@ -14,6 +14,9 @@ commands:
   uci [--model <path.onnx>|uniform] [--ep auto|cpu|coreml] [--threads T]
                                      UCI loop (default; uniform net without --model)
   dump-test-vectors [--out <path>]   write contract test vectors
+  bench [--model <onnx>|uniform] [--sims 800] [--batch 8] [--positions 6]
+        [--ep auto|cpu|coreml] [--threads T]
+                                     fixed-position search throughput (JSON)
   convert-pgn --input <pgn>|- (--out <bin> | --out-dir <dir>)
               [--chunk-samples 262144] [--max-games N] [--max-samples M] [--skip-games K]
                                      PGN games -> supervised training samples
@@ -53,6 +56,7 @@ fn main() -> Result<()> {
         None => run_uci(&[]),
         Some("uci") => run_uci(&args[1..]),
         Some("dump-test-vectors") => engine::cli::dump_vectors::run(&args[1..]),
+        Some("bench") => engine::cli::bench::run(&args[1..]),
         Some("convert-pgn") => engine::cli::convert_pgn::run(&args[1..]),
         Some("selfplay") => engine::cli::selfplay::run(&args[1..]),
         Some("-h" | "--help") => {
