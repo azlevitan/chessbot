@@ -165,6 +165,11 @@ impl SearchTree {
     pub fn result(&self) -> SearchResult {
         build_result(&self.arena, self.simulations, self.arena_full)
     }
+
+    /// Completed simulations, including visits retained by subtree reuse.
+    pub(crate) fn simulations(&self) -> u32 {
+        self.simulations
+    }
 }
 
 #[cfg(test)]

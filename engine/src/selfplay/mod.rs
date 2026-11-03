@@ -1,6 +1,8 @@
 //! Self-play data generation: play games with noisy MCTS and label each
 //! searched position with the final result from its side to move.
 
+pub mod batch_runner;
+pub mod driver;
 pub mod game;
 pub mod stats;
 
