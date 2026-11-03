@@ -2,6 +2,7 @@
 //! searched position with the final result from its side to move.
 
 pub mod game;
+pub mod stats;
 
 pub use game::{play_game, GameRecord, PlyRecord, SelfPlayConfig, Termination};
 

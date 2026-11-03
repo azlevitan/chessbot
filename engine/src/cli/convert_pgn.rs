@@ -4,12 +4,13 @@
 //! final game result (from the side to move) as both WDL label and `q_value`.
 
 use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::io::{self, BufRead, BufReader};
+use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 
 use super::bin_writer::{outcome_for, SampleWriter};
+use super::pgn_output::PgnOutput;
 use crate::board::legal_moves;
 use crate::encoder::sample::TrainingSample;
 use crate::encoder::tensor_encoder::encode_sample;
@@ -24,6 +25,13 @@ pub struct ConvertStats {
     pub converted: u64,
     pub skipped: u64,
     pub samples: u64,
+}
+
+#[derive(Default)]
+struct ConvertOptions {
+    max_games: Option<u64>,
+    max_samples: Option<u64>,
+    skip_games: u64,
 }
 
 /// Encode every mainline position of one game. Errors (no result, non-standard
@@ -52,17 +60,35 @@ pub fn convert_game(game: &RawGame) -> Result<Vec<TrainingSample>> {
 
 /// Stream games from `input` into `writer`, stopping after `max_games` games read.
 pub fn convert(input: impl BufRead, writer: &mut SampleWriter, max_games: Option<u64>) -> Result<ConvertStats> {
+    convert_stream(input, &ConvertOptions { max_games, ..Default::default() }, |samples, _| {
+        for sample in samples {
+            writer.write(sample)?;
+        }
+        writer.flush()
+    })
+}
+
+fn convert_stream(
+    input: impl BufRead, opts: &ConvertOptions,
+    mut write_game: impl FnMut(&[TrainingSample], u64) -> Result<()>,
+) -> Result<ConvertStats> {
     let mut reader = PgnReader::new(input);
     let mut stats = ConvertStats::default();
-    while max_games.map_or(true, |m| stats.games_read < m) {
+    for _ in 0..opts.skip_games {
+        if reader.next_game()?.is_none() {
+            return Ok(stats);
+        }
+        stats.games_read += 1;
+    }
+    while opts.max_games.map_or(true, |m| stats.games_read - opts.skip_games < m)
+        && opts.max_samples.map_or(true, |m| stats.samples < m)
+    {
         let Some(game) = reader.next_game()? else { break };
+        let game_index = stats.games_read;
         stats.games_read += 1;
         match convert_game(&game) {
             Ok(samples) => {
-                for s in &samples {
-                    writer.write(s)?;
-                }
-                writer.flush()?;
+                write_game(&samples, game_index)?;
                 stats.converted += 1;
                 stats.samples += samples.len() as u64;
             }
@@ -82,32 +108,55 @@ pub fn convert(input: impl BufRead, writer: &mut SampleWriter, max_games: Option
 /// Convert the PGN file at `input` into the sample file `out`.
 pub fn convert_file(input: &Path, out: &Path, max_games: Option<u64>) -> Result<ConvertStats> {
     let file = File::open(input).with_context(|| format!("opening {}", input.display()))?;
-    let mut writer = SampleWriter::create(out)?;
-    let stats = convert(BufReader::new(file), &mut writer, max_games)?;
+    let mut writer = PgnOutput::new(out.into(), None, input.display().to_string(), 0);
+    let opts = ConvertOptions { max_games, ..Default::default() };
+    let stats = convert_stream(BufReader::new(file), &opts, |s, i| writer.write_game(s, i))?;
     writer.finish()?;
     Ok(stats)
 }
 
 pub fn run(args: &[String]) -> Result<()> {
-    let (mut input, mut out, mut max_games) = (None, None, None);
+    let (mut input, mut out, mut out_dir) = (None, None, None);
+    let mut opts = ConvertOptions::default();
+    let mut chunk_samples = None;
     let mut it = args.iter();
     while let Some(arg) = it.next() {
+        let value = it.next().with_context(|| format!("{arg} requires a value"))?;
         match arg.as_str() {
-            "--input" => input = Some(it.next().context("--input requires a path")?.clone()),
-            "--out" => out = Some(it.next().context("--out requires a path")?.clone()),
-            "--max-games" => {
-                let n = it.next().context("--max-games requires a number")?;
-                max_games = Some(n.parse().with_context(|| format!("bad --max-games {n:?}"))?);
+            "--input" => input = Some(value.clone()),
+            "--out" => out = Some(PathBuf::from(value)),
+            "--out-dir" => out_dir = Some(PathBuf::from(value)),
+            "--max-games" | "--max-samples" | "--skip-games" | "--chunk-samples" => {
+                let n = value.parse::<u64>().with_context(|| format!("bad {arg} {value:?}"))?;
+                match arg.as_str() {
+                    "--max-games" => opts.max_games = Some(n),
+                    "--max-samples" => opts.max_samples = Some(n),
+                    "--skip-games" => opts.skip_games = n,
+                    _ => {
+                        ensure!(n > 0, "--chunk-samples must be positive");
+                        chunk_samples = Some(n);
+                    }
+                }
             }
             other => bail!("unknown argument for convert-pgn: {other}"),
         }
     }
     let input = input.context("convert-pgn requires --input <pgn>")?;
-    let out = out.context("convert-pgn requires --out <bin>")?;
-    let s = convert_file(Path::new(&input), Path::new(&out), max_games)?;
+    ensure!(out.is_some() != out_dir.is_some(), "provide exactly one of --out or --out-dir");
+    ensure!(chunk_samples.is_none() || out_dir.is_some(), "--chunk-samples requires --out-dir");
+    let limit = out_dir.as_ref().map(|_| chunk_samples.unwrap_or(262144));
+    let destination = out.or(out_dir).unwrap();
+    let reader: Box<dyn BufRead> = if input == "-" {
+        Box::new(io::stdin().lock())
+    } else {
+        Box::new(BufReader::new(File::open(&input).with_context(|| format!("opening {input}"))?))
+    };
+    let mut writer = PgnOutput::new(destination.clone(), limit, input, opts.skip_games);
+    let s = convert_stream(reader, &opts, |samples, i| writer.write_game(samples, i))?;
+    writer.finish()?;
     println!(
-        "games read {}, converted {}, skipped {}; wrote {} samples to {out}",
-        s.games_read, s.converted, s.skipped, s.samples
+        "games read {}, converted {}, skipped {}; wrote {} samples to {}",
+        s.games_read, s.converted, s.skipped, s.samples, destination.display()
     );
     Ok(())
 }

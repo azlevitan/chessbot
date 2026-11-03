@@ -1,5 +1,6 @@
 //! Neural-network evaluation: the `Evaluator` trait plus prior / value helpers.
 
+pub mod infer_opts;
 pub mod ort_infer;
 
 use anyhow::{ensure, Result};

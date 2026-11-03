@@ -4,11 +4,15 @@ use std::path::Path;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use ort::environment::Environment;
+#[cfg(target_os = "macos")]
 use ort::ep::CoreML;
 use ort::session::Session;
 use ort::value::Tensor;
 
 use super::{Evaluator, NetOutput};
+use super::infer_opts::InferOptions;
+#[cfg(target_os = "macos")]
+use super::infer_opts::Ep;
 use crate::encoder::move_mapper::NUM_MOVES;
 use crate::encoder::tensor_encoder::TENSOR_LEN;
 
@@ -35,16 +39,24 @@ pub struct OrtEvaluator {
 }
 
 impl OrtEvaluator {
-    pub fn new(model_path: &Path) -> Result<Self> {
+    pub fn new(model_path: &Path, opts: &InferOptions) -> Result<Self> {
+        opts.validate()?;
         let env = ort::init()
             .with_name("chessbot")
             .build()
             .map_err(|e| anyhow!("initializing ONNX Runtime: {e}"))?;
-        // CoreML registration failure is non-fatal: ORT falls back to the CPU EP.
-        let session = Session::builder(&env)
+        let mut builder = Session::builder(&env)
             .map_err(|e| anyhow!("creating session builder: {e}"))?
-            .with_execution_providers([CoreML::default().build()])
-            .map_err(|e| anyhow!("registering CoreML EP: {e}"))?
+            .with_intra_threads(opts.threads)
+            .map_err(|e| anyhow!("setting intra-op threads: {e}"))?;
+        // CoreML registration failure is non-fatal: ORT falls back to the CPU EP.
+        #[cfg(target_os = "macos")]
+        if opts.ep != Ep::Cpu {
+            builder = builder
+                .with_execution_providers([CoreML::default().build()])
+                .map_err(|e| anyhow!("registering CoreML EP: {e}"))?;
+        }
+        let session = builder
             .commit_from_file(model_path)
             .map_err(|e| anyhow!("loading {}: {e}", model_path.display()))?;
         let inputs: Vec<&str> = session.inputs().iter().map(|o| o.name()).collect();
@@ -85,10 +97,11 @@ impl Evaluator for OrtEvaluator {
 }
 
 /// `Some(path)` -> ONNX model, `None` -> uniform dummy evaluator.
-pub fn load_evaluator(model_path: Option<&Path>) -> Result<Box<dyn Evaluator>> {
+pub fn load_evaluator(model_path: Option<&Path>, opts: &InferOptions) -> Result<Box<dyn Evaluator>> {
+    opts.validate()?;
     match model_path {
         Some(path) => Ok(Box::new(
-            OrtEvaluator::new(path).with_context(|| format!("model {}", path.display()))?,
+            OrtEvaluator::new(path, opts).with_context(|| format!("model {}", path.display()))?,
         )),
         None => Ok(Box::new(UniformEvaluator)),
     }
