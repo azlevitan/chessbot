@@ -267,8 +267,8 @@
     5. `llr` is negative at score 0.5 and positive at 0.65 with 200 games.
     6. `decide` returns `sprt_accept` for (90, 20, 10), `sprt_reject` for (20, 20, 80), and `max_games` with `promoted == (llr > 0)` at the cap.
   - Implemented stdlib-only score, Elo, confidence interval, GSPRT and promotion helpers. `score` returns the raw fraction; Elo, variance, CI and LLR follow SPEC §9's clamped `x`, with CI endpoints clamped before conversion. Inclusive SPRT bounds take precedence over the game cap; cap promotion requires strictly positive LLR. Invalid inputs (including empty results and inconsistent game totals) raise `ValueError`.
-  - Verified on Linux CPU: `pytest pipeline/tests/test_elo.py` exits 0 (125 tests). Covers all required fixtures, fixed CI/LLR reference values, one-game and all-win/loss/draw cases, the variance floor, extreme finite hypotheses, continuation, inclusive thresholds, cap precedence and input validation. Both new Python sources remain under 250 lines. Phase 8.4 and GATE 8 remain open.
-- [ ] **8.4 Block-wise evaluation driver.**
+  - Verified on Linux CPU: `pytest pipeline/tests/test_elo.py` exits 0 (125 tests). Covers all required fixtures, fixed CI/LLR reference values, one-game and all-win/loss/draw cases, the variance floor, extreme finite hypotheses, continuation, inclusive thresholds, cap precedence and input validation. Both new Python sources remain under 250 lines. Phase 8.4 and GATE 8 were left open at this step.
+- [x] **8.4 Block-wise evaluation driver.**
   - Files: `pipeline/evaluate.py` (new, stdlib), `pipeline/tests/test_evaluate.py` (new).
   - CLI:
     ~~~
@@ -282,7 +282,9 @@
     2. Re-run: no new blocks and block mtimes unchanged.
     3. `uniform` vs `uniform` with `--max-games 20`: not promoted.
     4. Deleting `decision.json` and re-running reproduces it from the existing blocks without running the engine (check that the call count via a fake `--engine` wrapper script is 0).
-- [ ] **GATE 8:** `cd engine && cargo test --release && cd .. && pytest pipeline/tests/test_elo.py pipeline/tests/test_evaluate.py` exits with `0`.
+  - Implemented the stdlib driver with sequential subprocesses, fixed `20*b` opening offsets, `seed_base+b` seeds, capped final blocks, validated match reports and atomic publication. Completed blocks are replayed in numeric order through the existing Elo/SPRT helpers, stopping at the first decision. Reruns preserve block bytes and mtimes; deleted or malformed decisions are rebuilt deterministically without engine calls. Resume assumes unchanged settings; match reports do not record batch size, provider or thread count.
+  - Verified on Linux CPU: GATE 8 exits 0 (145 Rust tests and 182 Python tests: 125 Elo, 57 evaluation). All four required acceptance cases pass. Additional tests cover exact argument forwarding, cumulative statistics, shortened final blocks, earliest cached stopping, failed-block retry, malformed reports and decisions, invalid CLI inputs, and output path collisions including dangling symlinks. The new Python sources are 197 and 216 lines, both under 250.
+- [x] **GATE 8:** `cd engine && cargo test --release && cd .. && pytest pipeline/tests/test_elo.py pipeline/tests/test_evaluate.py` exits with `0`.
 
 ## Phase 9: Closed, Resumable RL Loop
 - [ ] **9.1 Config + replay window.**
