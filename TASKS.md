@@ -249,7 +249,7 @@
   - Implemented sequential colour-swapped pairs, fresh per-game players seeded with `seed + game`, full opening-inclusive history, greedy batched search with tree reuse, and natural termination before material adjudication at the ply cap. Custom books reuse the existing 50-line parser; opening moves count toward the cap, and caps shorter than a selected opening are rejected.
   - The CLI writes deterministic SPEC §9 JSON and optional standard-UCI move logs through separate atomic publications, validating inputs before output changes and handling output aliases/temporary-name collisions. ONNX evaluators now share one process-wide ORT environment while retaining independent sessions, supporting both players and repeated model loading across games.
   - Verified on Linux CPU: `cd engine && cargo test --release` exits 0 (145 tests), and `python3 pipeline/test_uci_mate.py` exits 0 (3/3 mates). Required material/random match scored 0.85 (15 wins, 1 loss, 4 draws); uniform/uniform scored 0.5. Tests cover byte-identical reruns, opening offsets/castling, natural terminal openings, RNG reseeding, adjudication boundaries, invalid inputs, output collisions, and simultaneous/reconstructed ONNX sessions using a 586-byte dynamic-batch fixture. A separate two-session ONNX CPU smoke completed at about 132 MiB peak RSS on this Linux host; M1/CoreML RSS was not measured. Every touched Rust source remains under 250 lines.
-- [ ] **8.3 Elo / SPRT math.**
+- [x] **8.3 Elo / SPRT math.**
   - Files: `pipeline/elo.py` (new, stdlib), `pipeline/tests/test_elo.py` (new).
   - Interface:
     - `score(w, d, l) -> float`
@@ -266,6 +266,8 @@
     4. `sprt_bounds(0.05, 0.05) ≈ (−2.944, 2.944)`.
     5. `llr` is negative at score 0.5 and positive at 0.65 with 200 games.
     6. `decide` returns `sprt_accept` for (90, 20, 10), `sprt_reject` for (20, 20, 80), and `max_games` with `promoted == (llr > 0)` at the cap.
+  - Implemented stdlib-only score, Elo, confidence interval, GSPRT and promotion helpers. `score` returns the raw fraction; Elo, variance, CI and LLR follow SPEC §9's clamped `x`, with CI endpoints clamped before conversion. Inclusive SPRT bounds take precedence over the game cap; cap promotion requires strictly positive LLR. Invalid inputs (including empty results and inconsistent game totals) raise `ValueError`.
+  - Verified on Linux CPU: `pytest pipeline/tests/test_elo.py` exits 0 (125 tests). Covers all required fixtures, fixed CI/LLR reference values, one-game and all-win/loss/draw cases, the variance floor, extreme finite hypotheses, continuation, inclusive thresholds, cap precedence and input validation. Both new Python sources remain under 250 lines. Phase 8.4 and GATE 8 remain open.
 - [ ] **8.4 Block-wise evaluation driver.**
   - Files: `pipeline/evaluate.py` (new, stdlib), `pipeline/tests/test_evaluate.py` (new).
   - CLI:
