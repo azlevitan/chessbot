@@ -229,13 +229,15 @@
 - [x] **GATE 7:** `cd engine && cargo test --release && cd .. && python3 pipeline/bench_gate.py` exits with `0`.
 
 ## Phase 8: Evaluation, Baselines & Elo Math
-- [ ] **8.1 Players, material evaluator & opening book.**
+- [x] **8.1 Players, material evaluator & opening book.**
   - Files: `engine/src/eval/mod.rs` (new), `engine/src/eval/material.rs` (new: `MaterialEvaluator: Evaluator` per SPEC §9, reading planes 0..11 of the already-encoded tensor), `engine/src/eval/players.rs` (new: `enum Player { Mcts { eval, tree, batch, sims }, Random { rng } }` with `choose(&mut self, board, history) -> Result<Move>` using greedy argmax visit selection (`T = 0`) and `observe(mv)` for tree reuse; `Player::from_spec(spec, sims, batch, opts, seed)`), `engine/src/eval/openings.rs` (new: `include_str!("../../data/openings.txt")`, `fn openings() -> Vec<Vec<Move>>` validated against legality), `engine/data/openings.txt` (new: 50 balanced lines, 2–8 plies, UCI), `engine/src/lib.rs`, `engine/tests/eval_players.rs` (new).
   - Test:
     1. Material `v == 0` at startpos and `v > 0.8` for White to move a queen up (`4k3/8/8/8/8/8/8/3QK3 w - - 0 1`).
     2. Material MCTS (`sims 64`) captures a hanging queen in `4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1` (`e4d5`).
     3. All 50 openings parse and are legal, with no duplicates.
     4. `Random` with the same seed picks the same moves.
+  - Implemented independent MCTS/random players, batched material evaluation, and 50 embedded legal openings. `choose` searches without advancing; callers send every committed move to both players through `observe`. MCTS retains board/history for reuse and resets when the supplied position or history differs. Greedy selection uses visits, prior, then canonical move index without changing shared MCTS result selection.
+  - Verified on Linux CPU: `cargo test --release --offline --manifest-path engine/Cargo.toml` exits 0 (124 Rust tests, including 10 `eval_players` integration tests and 6 new unit tests), and `python3 pipeline/test_uci_mate.py` exits 0 (3/3 mates). Tests also cover Black perspective, batched capture search, canonical tie-breaking, opening castling, retained visits/new simulation budgets, history-sensitive repetition, invalid observations/options/models, and terminal-position errors. Every touched Rust source remains under 250 lines.
 - [ ] **8.2 `engine match` (SPEC §9).**
   - Files: `engine/src/eval/match_runner.rs` (new: plays one game pair at a time sequentially; per-player in-tree batching via `--batch`, passing game history hashes so MCTS avoids 3-fold repetitions when winning), `engine/src/eval/adjudicate.rs` (new: §7 termination + ply-cap material adjudication), `engine/src/cli/match_cmd.rs` (new: flags, `match.json` via serde, optional `--moves-out`), `engine/src/cli/mod.rs`, `engine/src/main.rs`, `engine/tests/match_cmd.rs` (new).
   - Test:

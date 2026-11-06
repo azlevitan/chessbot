@@ -4,6 +4,7 @@
 pub mod board;
 pub mod cli;
 pub mod encoder;
+pub mod eval;
 pub mod mcts;
 pub mod nn;
 pub mod pgn;
