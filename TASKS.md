@@ -202,7 +202,7 @@
     4. Integration: uniform selfplay with `--resign-threshold -1.0` has `terminations.resign == 0` and a sidecar `resign` block with the configured values.
   - Supporting changes: `engine/src/selfplay/game.rs` (config validation, resignation termination, audit fields, and an optional played move for the final resignation sample), `engine/src/selfplay/mod.rs`, `engine/src/selfplay/batch_runner.rs`, and existing selfplay/chunk tests. Additional integration tests live in `engine/tests/resign_games.rs` and `engine/tests/resign_cli.rs`.
   - Verified on Linux CPU: `cd engine && cargo test --release` (102 tests) and `python3 pipeline/test_uci_mate.py` (3/3 mates) exit 0. Covers both colours' resignation labels, recovery and threshold boundaries, first-trigger auditing against all final results, disabled resignation, configured sidecars, validation before output changes, exactly one initial RNG draw, and identical samples/audit counters at P=1/3/4 with K=1/4 and both reuse modes. The 492-byte sample contract is unchanged.
-- [ ] **7.6 `engine bench` + regression floor.**
+- [x] **7.6 `engine bench` + regression floor.**
   - Files: `engine/src/cli/bench.rs` (new), `engine/src/cli/mod.rs`, `engine/src/main.rs`, `pipeline/bench_gate.py` (new, stdlib).
   - Tests: `engine/tests/bench.rs` and `pipeline/tests/test_bench_gate.py` (new).
   - CLI: `engine bench [--model <onnx>|uniform] [--sims 800] [--batch 8] [--positions 6] [--ep ..] [--threads ..]` searches 6 fixed FENs (startpos, Kiwipete, 4 middlegames listed in the file) and prints the SPEC §8 JSON line.
@@ -212,7 +212,19 @@
     3. `sims == 6 * 800`.
   - In the task's PR description, record the M1 numbers for a real 6x64 ONNX at batch 1/8/32 under `--ep coreml` and `--ep cpu`. The faster one becomes the default `ep` in `pipeline/configs/m1_overnight.json` (9.1).
   - Implementation verified on Linux CPU: GATE 7 exits 0 (108 Rust tests); uniform batch 1 measured 311,538 sims/s and batch 8 averaged 7.921 evaluations/call, both with 4,800 simulations. The 26 gate-validation tests and all 3 UCI mate checks pass. Also verified the gate from outside the repo with optimized Python (`-O`). Every touched Rust/Python source remains under 250 lines.
-  - Real SE-ResNet-6x64 ONNX smoke run on Linux CPU (`--threads 1`, six positions, 800 sims each): batches 1/8/32 measured 397.5/853.7/977.8 evals/s. Counts distinguish terminal simulations from evaluations (4,800 simulations versus 4,693/4,693/4,695 evaluations). These are Linux measurements; the task remains open for the required M1 CPU/CoreML measurements and resulting Phase 9.1 provider recommendation.
+  - Real SE-ResNet-6x64 ONNX smoke run on Linux CPU (`--threads 1`, six positions, 800 sims each): batches 1/8/32 measured 397.5/853.7/977.8 evals/s. Counts distinguish terminal simulations from evaluations (4,800 simulations versus 4,693/4,693/4,695 evaluations).
+  - Owner-supplied M1 measurements, received 2026-11-06: MacBook Pro `MacBookPro17,1`, Apple M1, 8 GB RAM; macOS 15.4 (24E248). Measured commit: `f1fd64411b956836331de0bfc5cc92150072a9ac` (PR #14 merge). Model: `benchmark.onnx`, SE-ResNet-6x64, SHA-256 `21765965c84d1368bb5131714fecb557384f47de143a367ba36235439908ff73`. All six runs used `--sims 800 --positions 6 --threads 1`:
+
+    | Selected EP | Batch | Simulations | Evaluations | Seconds | Sims/s | Evals/s | Avg. batch |
+    | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+    | cpu | 1 | 4800 | 4691 | 13.852 | 346.5 | 338.7 | 1.000 |
+    | cpu | 8 | 4800 | 4691 | 75.067 | 63.9 | 62.5 | 7.741 |
+    | cpu | 32 | 4800 | 4693 | 27.651 | 173.6 | 169.7 | 29.892 |
+    | coreml | 1 | 4800 | 4691 | 12.883 | 372.6 | 364.1 | 1.000 |
+    | coreml | 8 | 4800 | 4691 | 74.550 | 64.4 | 62.9 | 7.741 |
+    | coreml | 32 | 4800 | 4693 | 27.260 | 176.1 | 172.2 | 29.892 |
+
+  - Phase 9.1 provider recommendation: `coreml`, provisionally, because it was faster in all three single-run comparisons (7.52% more evals/s at batch 1). Batch 1 was fastest in this single-tree benchmark; larger batches were slower under both selected providers, with the cause undetermined. The selected-provider label does not confirm CoreML or Neural Engine execution: existing ORT CPU fallback remains possible. CoreML graph-cache conditions were not reported, and repeated runs/profiling are needed to establish a stable hardware-acceleration advantage.
   - M1 handoff (from the repo root after a release build): set `bench_model=/absolute/path/to/model.onnx`, record `shasum -a 256 "$bench_model"`, then run `for bench_ep in cpu coreml; do for bench_batch in 1 8 32; do engine/target/release/engine bench --model "$bench_model" --sims 800 --positions 6 --batch "$bench_batch" --ep "$bench_ep" --threads 1; done; done`. Record the model/hash, macOS/M1 details, batch/EP, graph-cache conditions and any CoreML fallback alongside each JSON result. The JSON `ep` field names the selected provider; existing ORT fallback still applies. Timing excludes model loading but includes the first inference in each process.
 - [x] **GATE 7:** `cd engine && cargo test --release && cd .. && python3 pipeline/bench_gate.py` exits with `0`.
 
