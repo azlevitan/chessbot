@@ -15,7 +15,8 @@ pub fn openings() -> Vec<Vec<Move>> {
     parse_book(BOOK).expect("invalid embedded engine/data/openings.txt")
 }
 
-fn parse_book(text: &str) -> Result<Vec<Vec<Move>>> {
+/// Parse an external book using the same format and legality checks as the embedded one.
+pub fn parse_book(text: &str) -> Result<Vec<Vec<Move>>> {
     let lines: Vec<_> = text.lines().collect();
     ensure!(
         lines.len() == 50,

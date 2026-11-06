@@ -1,6 +1,7 @@
 //! ONNX Runtime inference (SPEC.md §4) and the uniform dummy fallback.
 
 use std::path::Path;
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use ort::environment::Environment;
@@ -19,6 +20,22 @@ use crate::encoder::tensor_encoder::TENSOR_LEN;
 pub const INPUT_NAME: &str = "input_planes";
 pub const POLICY_NAME: &str = "policy_logits";
 pub const WDL_NAME: &str = "wdl_logits";
+
+// ort rc.15 permits only one environment construction for the entire process,
+// including after all sessions have been dropped. Keep its shared handle alive
+// across both match players and all games; session options remain independent.
+fn shared_environment() -> Result<Environment> {
+    static ENV: OnceLock<std::result::Result<Environment, String>> = OnceLock::new();
+    ENV.get_or_init(|| {
+        ort::init()
+            .with_name("chessbot")
+            .build()
+            .map_err(|error| error.to_string())
+    })
+    .as_ref()
+    .cloned()
+    .map_err(|error| anyhow!("initializing ONNX Runtime: {error}"))
+}
 
 /// Dummy network: uniform policy over legal moves and a dead-even value (v = 0).
 #[derive(Default)]
@@ -41,10 +58,7 @@ pub struct OrtEvaluator {
 impl OrtEvaluator {
     pub fn new(model_path: &Path, opts: &InferOptions) -> Result<Self> {
         opts.validate()?;
-        let env = ort::init()
-            .with_name("chessbot")
-            .build()
-            .map_err(|e| anyhow!("initializing ONNX Runtime: {e}"))?;
+        let env = shared_environment()?;
         let mut builder = Session::builder(&env)
             .map_err(|e| anyhow!("creating session builder: {e}"))?
             .with_intra_threads(opts.threads)
@@ -104,5 +118,23 @@ pub fn load_evaluator(model_path: Option<&Path>, opts: &InferOptions) -> Result<
             OrtEvaluator::new(path, opts).with_context(|| format!("model {}", path.display()))?,
         )),
         None => Ok(Box::new(UniformEvaluator)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shared_environment;
+
+    #[test]
+    fn concurrent_loaders_and_later_games_can_share_the_process_environment() {
+        let loaders: Vec<_> = (0..4)
+            .map(|_| std::thread::spawn(shared_environment))
+            .collect();
+        let environments: Vec<_> = loaders
+            .into_iter()
+            .map(|loader| loader.join().unwrap().unwrap())
+            .collect();
+        drop(environments);
+        assert!(shared_environment().is_ok());
     }
 }

@@ -17,6 +17,10 @@ commands:
   bench [--model <onnx>|uniform] [--sims 800] [--batch 8] [--positions 6]
         [--ep auto|cpu|coreml] [--threads T]
                                      fixed-position search throughput (JSON)
+  match --a <PLAYER> --b <PLAYER> --games <N even> --sims <S> --seed <X> --out <json>
+        [--openings <file>] [--opening-offset 0] [--max-plies 300] [--batch 8]
+        [--moves-out <txt>] [--ep auto|cpu|coreml] [--threads T]
+                                     paired evaluation (onnx, uniform, material, random)
   convert-pgn --input <pgn>|- (--out <bin> | --out-dir <dir>)
               [--chunk-samples 262144] [--max-games N] [--max-samples M] [--skip-games K]
                                      PGN games -> supervised training samples
@@ -57,6 +61,7 @@ fn main() -> Result<()> {
         Some("uci") => run_uci(&args[1..]),
         Some("dump-test-vectors") => engine::cli::dump_vectors::run(&args[1..]),
         Some("bench") => engine::cli::bench::run(&args[1..]),
+        Some("match") => engine::cli::match_cmd::run(&args[1..]),
         Some("convert-pgn") => engine::cli::convert_pgn::run(&args[1..]),
         Some("selfplay") => engine::cli::selfplay::run(&args[1..]),
         Some("-h" | "--help") => {

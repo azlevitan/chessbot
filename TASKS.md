@@ -238,7 +238,7 @@
     4. `Random` with the same seed picks the same moves.
   - Implemented independent MCTS/random players, batched material evaluation, and 50 embedded legal openings. `choose` searches without advancing; callers send every committed move to both players through `observe`. MCTS retains board/history for reuse and resets when the supplied position or history differs. Greedy selection uses visits, prior, then canonical move index without changing shared MCTS result selection.
   - Verified on Linux CPU: `cargo test --release --offline --manifest-path engine/Cargo.toml` exits 0 (124 Rust tests, including 10 `eval_players` integration tests and 6 new unit tests), and `python3 pipeline/test_uci_mate.py` exits 0 (3/3 mates). Tests also cover Black perspective, batched capture search, canonical tie-breaking, opening castling, retained visits/new simulation budgets, history-sensitive repetition, invalid observations/options/models, and terminal-position errors. Every touched Rust source remains under 250 lines.
-- [ ] **8.2 `engine match` (SPEC §9).**
+- [x] **8.2 `engine match` (SPEC §9).**
   - Files: `engine/src/eval/match_runner.rs` (new: plays one game pair at a time sequentially; per-player in-tree batching via `--batch`, passing game history hashes so MCTS avoids 3-fold repetitions when winning), `engine/src/eval/adjudicate.rs` (new: §7 termination + ply-cap material adjudication), `engine/src/cli/match_cmd.rs` (new: flags, `match.json` via serde, optional `--moves-out`), `engine/src/cli/mod.rs`, `engine/src/main.rs`, `engine/tests/match_cmd.rs` (new).
   - Test:
     1. `material` vs `random`, 20 games, `--sims 32 --seed 0 --max-plies 200`: `a_score ≥ 0.75`; `a_wins + b_wins + draws == 20`; games alternate `white: a/b`; openings are `offset + k`.
@@ -246,6 +246,9 @@
     3. `uniform` vs `uniform`, 4 games: `a_score == 0.5` (colour-symmetric pairs).
     4. An odd `--games` is rejected.
   - RAM: 2 trees + 2 evaluators ≈ 200 MB with two 6x64 ONNX sessions.
+  - Implemented sequential colour-swapped pairs, fresh per-game players seeded with `seed + game`, full opening-inclusive history, greedy batched search with tree reuse, and natural termination before material adjudication at the ply cap. Custom books reuse the existing 50-line parser; opening moves count toward the cap, and caps shorter than a selected opening are rejected.
+  - The CLI writes deterministic SPEC §9 JSON and optional standard-UCI move logs through separate atomic publications, validating inputs before output changes and handling output aliases/temporary-name collisions. ONNX evaluators now share one process-wide ORT environment while retaining independent sessions, supporting both players and repeated model loading across games.
+  - Verified on Linux CPU: `cd engine && cargo test --release` exits 0 (145 tests), and `python3 pipeline/test_uci_mate.py` exits 0 (3/3 mates). Required material/random match scored 0.85 (15 wins, 1 loss, 4 draws); uniform/uniform scored 0.5. Tests cover byte-identical reruns, opening offsets/castling, natural terminal openings, RNG reseeding, adjudication boundaries, invalid inputs, output collisions, and simultaneous/reconstructed ONNX sessions using a 586-byte dynamic-batch fixture. A separate two-session ONNX CPU smoke completed at about 132 MiB peak RSS on this Linux host; M1/CoreML RSS was not measured. Every touched Rust source remains under 250 lines.
 - [ ] **8.3 Elo / SPRT math.**
   - Files: `pipeline/elo.py` (new, stdlib), `pipeline/tests/test_elo.py` (new).
   - Interface:
