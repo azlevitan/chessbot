@@ -1,0 +1,50 @@
+{
+  "milestone": "M1 - Generation 0",
+  "generation": 0,
+  "status": "passed_owner_reported",
+  "recorded_date": "2026-11-08",
+  "timezone": "America/Toronto",
+  "evidence": "Training metrics and training RSS were supplied in pasted output; the owner confirmed successful export and supplied both baseline scores and RSS values. Raw model and match files remain on the owner's Mac and were not independently inspected here.",
+  "run_directory": "data_store/runs/main",
+  "training": {
+    "steps": 30000,
+    "samples_seen": 15360000,
+    "source_samples": 4194402,
+    "seconds": 7920.919475165982,
+    "final_loss": 2.29067325592041,
+    "policy_loss": 1.4494765996932983,
+    "wdl_loss": 0.8411967754364014,
+    "val": {
+      "policy_top1": 0.414306640625,
+      "policy_loss": 1.9413815438747406,
+      "wdl_loss": 0.8881552293896675
+    },
+    "maximum_rss_bytes": 1310982144
+  },
+  "export": {
+    "status": "passed_owner_confirmed",
+    "recovery": "bootstrap.py --export-only",
+    "fix_commit": "8eb50214a2adb6173fc401878ab343b6af5ceaae"
+  },
+  "baseline_command_settings": {
+    "games": 20,
+    "sims": 200,
+    "seed": 0,
+    "batch": 1,
+    "ep": "auto",
+    "threads": 1,
+    "provenance": "Commands supplied for and followed in the owner's verification workflow; raw match JSON has not been uploaded."
+  },
+  "anchors": {
+    "random": { "a_score": 1.0, "maximum_rss_bytes": 330448896 },
+    "material": { "a_score": 1.0, "maximum_rss_bytes": 325107712 }
+  },
+  "acceptance_thresholds": {
+    "minimum_policy_top1": 0.35,
+    "maximum_wdl_loss": 1.0,
+    "minimum_vs_random": 0.95,
+    "minimum_vs_material": 0.70,
+    "maximum_rss_bytes": 2500000000
+  },
+  "artifact_preservation": "Run python pipeline/archive_generation_zero.py on the Mac to copy the original models, result JSON, run state and available logs into a checksummed local archive outside OneDrive. This results record does not itself copy those files."
+}

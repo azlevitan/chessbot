@@ -367,12 +367,13 @@
 
 ## Milestones (real M1 runs; owner-driven, not cloud-gated)
 Each is checked off when its acceptance command shows the stated numbers. Use `~/.venvs/chessbot/bin/python`.
-- [ ] **M1 – Generation 0 (after GATE 8):**
+- [x] **M1 – Generation 0 (after GATE 8):**
   - Command: `python pipeline/bootstrap.py --pgn lichess_elite_YYYY-MM.pgn.zst --run data_store/runs/main --config pipeline/configs/m1_overnight.json` (unzip the Lichess Elite `.zip` first if needed; plain `.pgn` also works), then `engine match` anchors vs `random` and `material`.
   - Accept when:
     1. `gens/gen_0000/train.json` shows `val.policy_top1 ≥ 0.35` and `val.wdl_loss ≤ 1.0`.
     2. The anchor scores are `vs_random ≥ 0.95` and `vs_material ≥ 0.70` (20 games, 200 sims).
     3. `/usr/bin/time -l` shows peak RSS ≤ 2.5 GB.
+  - Owner-confirmed results recorded 2026-11-08 (America/Toronto): 30,000 training steps; validation policy top-1 `0.414306640625`, WDL loss `0.8881552293896675`; both anchor `a_score` values `1.0`. Maximum RSS: training `1,310,982,144` bytes, random match `330,448,896` bytes, material match `325,107,712` bytes, all below 2.5 GB. The owner confirmed successful `--export-only` recovery with the Phase 8 export-parity fix. See `training/GENERATION_0_RESULTS.json` for provenance; raw model/match files remain on the owner's Mac. Use `python pipeline/archive_generation_zero.py` there to create a checksummed copy outside OneDrive. The run used `data_store/bootstrap.json`; the future Phase 9 overnight config was not required.
 - [ ] **M2 – First overnight generation (after GATE 9):**
   - Command: `python pipeline/loop.py --run data_store/runs/main --engine engine/target/release/engine --generations 1`.
   - Accept when:

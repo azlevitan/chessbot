@@ -79,3 +79,24 @@ Generation 0 also needs final `val.policy_top1 >= 0.35`, `val.wdl_loss <= 1.0`,
 and measured maximum RSS no greater than 2.5 GB. Export success alone does not
 complete the milestone. Batch 1 follows the recorded M1 benchmark as a starting
 choice; `--ep auto` may fall back to CPU.
+
+## Preserve the completed run
+
+On the Mac that contains the actual model and match files, run from the repo root:
+
+```bash
+python pipeline/archive_generation_zero.py
+```
+
+The command copies both models, the training summary, both anchor JSON files,
+bootstrap decision/run state, and available logs into a new timestamped directory
+under `~/Library/Application Support/chessbot/archives/`, outside OneDrive. Source
+files are retained. Each copied file is checked with SHA-256; the archive's
+`manifest.json` records the hashes, exact match results, available RSS values and
+any missing optional logs. Missing required artifacts abort instead of claiming
+a complete archive. Original tee logs may be incomplete because of earlier
+OneDrive timeouts. Temporary logs under `/tmp` are copied if they still exist.
+
+`training/GENERATION_0_RESULTS.json` records the owner's confirmed milestone
+metrics. It is a results record, not a substitute for copying the original model
+files; the cloud workspace cannot perform this Mac-local copy itself.
