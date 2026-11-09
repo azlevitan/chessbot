@@ -287,7 +287,7 @@
 - [x] **GATE 8:** `cd engine && cargo test --release && cd .. && pytest pipeline/tests/test_elo.py pipeline/tests/test_evaluate.py` exits with `0`.
 
 ## Phase 9: Closed, Resumable RL Loop
-- [ ] **9.1 Config + replay window.**
+- [x] **9.1 Config + replay window.**
   - Files: `pipeline/config.py` (new: `load_config(path) -> dict`, deep-merged over SPEC §10 defaults including `train.q_ratio: 0.3` and `selfplay.temp_plies: 30`, and validated: `games_per_chunk ≤ 1000`, `block_games` even, …), `pipeline/configs/m1_overnight.json` (new: the SPEC §10 example with `q_ratio: 0.3`, `ep` from the 7.6 bench), `pipeline/configs/ci_tiny.json` (new: `selfplay.games 4, games_per_chunk 2, sims 16, parallel 4, max_plies 40, temp_plies 10, ep "cpu"`; `train.steps 20, batch_size 16, q_ratio 0.3, device cpu, steps_per_epoch 10`; `match.block_games 4, max_games 8, sims 16`; `anchors.games 2`; `window.max_samples 10000`), `pipeline/window.py` (new: `select_window(run_dir, gen, cfg) -> list[tuple[list[Path], float]]`, returning `(chunk paths, weight)` per source per SPEC §10; `train_args(...) -> list[str]` building one `--source a.bin,b.bin,...:W` flag per source), `pipeline/tests/test_window.py` (new).
   - Test: build a fake run tree with sidecars and zero-filled `.bin` files of the correct size (no engine needed). Assert:
     1. Gen 6 with `W = 4` uses gens 3–6 only, newest-first.
@@ -295,6 +295,8 @@
     3. Incomplete chunks are excluded.
     4. The supervised weight is 0.5 at gen 1 and 0.0 at gen ≥ 5.
     5. A zero-weight source is omitted.
+  - Implemented stdlib-only config loading with independent deep-merged defaults, strict field validation, and the M1/CoreML and CPU CI presets. Replay selection pools selfplay chunks into one source, orders generations and chunk indices newest-first, and includes the whole chunk that first reaches or crosses the sample threshold. Supervised data is a separate scheduled source outside that cap; validation data is excluded. Selection reads only metadata and file sizes, ignores incomplete/empty chunks, and serializes deterministic `--source` arguments without importing training dependencies.
+  - Verified on Linux CPU: `python -m pytest -c pipeline/pyproject.toml pipeline/tests/test_window.py` exits 0 (92 tests, using the workspace virtualenv). Covers all five acceptance cases plus cap boundaries/overshoot, source pooling, schedule endpoints, malformed metadata, binary-read exclusion, deep-merge independence, presets, invalid configs and source argument handling. Both modules also import successfully with site packages disabled; every new Python file is under 250 lines. Bootstrap config/resume behavior is unchanged; Phase 9.2 onward and GATE 9 remain open.
 - [ ] **9.2 Idempotent stages.**
   - Files: `pipeline/stages.py` (new; one function per stage `selfplay | train | export | match | decide | anchors`, each `(run_dir, gen, cfg, state) -> None`, each skips completed work per the SPEC §10 resume rule and uses `subprocess.run(check=True)`), `pipeline/tests/test_stages.py` (new).
   - Details:
