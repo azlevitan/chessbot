@@ -103,6 +103,8 @@ def parse_args(argv=None):
     parser.add_argument("--steps", type=int, default=30000)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
+    parser.add_argument("--export-only", action="store_true",
+                        help="retry export from a completed checkpoint without conversion/training")
     args = parser.parse_args(argv)
     if min(args.val_games, args.max_samples, args.steps, args.batch_size) < 1:
         parser.error("val-games, max-samples, steps and batch-size must be positive")
@@ -127,17 +129,23 @@ def main(argv=None) -> None:
                               or state["stage"] != "selfplay"):
         print(f"Run already advanced beyond bootstrap: {args.run}")
         return
-    if not ENGINE_BIN.is_file():
+    if not args.export_only and not ENGINE_BIN.is_file():
         raise FileNotFoundError(f"build the release engine first: {ENGINE_BIN}")
     validation, supervised = args.run / "supervised_val", args.run / "supervised"
     gen = generation_dir(args.run, 0)
     checkpoint, summary, onnx, decision = (gen / name for name in
                                           ("model.pt", "train.json", "model.onnx", "decision.json"))
     dependents = (checkpoint, summary, onnx, decision)
-    changed = convert_stage(args.pgn, validation, "--max-games", str(args.val_games),
-                            invalidate=dependents)
-    changed |= convert_stage(args.pgn, supervised, "--skip-games", str(args.val_games),
-                             "--max-samples", str(args.max_samples), invalidate=dependents)
+    changed = False
+    if args.export_only:
+        for directory in (validation, supervised):
+            if read_json(directory / ".complete.json")["chunks"] != chunk_manifest(directory):
+                raise ValueError(f"{directory}: export-only requires complete converted data")
+    else:
+        changed = convert_stage(args.pgn, validation, "--max-games", str(args.val_games),
+                                invalidate=dependents)
+        changed |= convert_stage(args.pgn, supervised, "--skip-games", str(args.val_games),
+                                 "--max-samples", str(args.max_samples), invalidate=dependents)
     train_ready = checkpoint.is_file() and checkpoint.stat().st_size > 0
     try:
         read_json(summary)
@@ -145,6 +153,8 @@ def main(argv=None) -> None:
         train_ready = False
     train_ready &= not any(path.with_name(path.name + ".tmp").exists()
                            for path in (checkpoint, summary))
+    if args.export_only and not train_ready:
+        raise ValueError("export-only requires complete model.pt and train.json; training was not run")
     if changed or not train_ready:
         remove_outputs(checkpoint, summary, onnx, decision)
         options = []
@@ -156,9 +166,11 @@ def main(argv=None) -> None:
                          "--steps", args.steps, "--batch-size", args.batch_size,
                          "--device", args.device, "--seed", config.get("seed", 0), *options)
     temporary = onnx.with_name(onnx.name + ".tmp")
-    if temporary.exists() or not valid_onnx(onnx):
-        remove_outputs(onnx, decision)
-        training_process("export_onnx.py", "--checkpoint", checkpoint, "--out", temporary)
+    if args.export_only or temporary.exists() or not valid_onnx(onnx):
+        # Validate a replacement before touching a previously published model.
+        temporary.unlink(missing_ok=True)
+        training_process("export_onnx.py", "--checkpoint", checkpoint, "--out", temporary,
+                         "--parity-source", validation)
         temporary.replace(onnx)
     bootstrap_decision = {"promoted": True, "reason": "bootstrap"}
     try:

@@ -69,6 +69,8 @@ pub struct TrainingSample {
   - Output 0 name: `"policy_logits"`, shape `[batch_size, 4168]`, type `float32`
   - Output 1 name: `"wdl_logits"`, shape `[batch_size, 3]`, type `float32`
   - Dynamic axis `0` (`batch_size`) on all inputs and outputs.
+  - **Export parity (CPU PyTorch vs CPU ONNX Runtime):** reject nonfinite outputs and shape mismatches. For the seeded random-input stress cases (batches 1 and 7), compare every raw logit using `abs(onnx - reference) <= 1e-4 + 1e-6 * abs(reference)`; the relative term applies to that logit, never the largest value elsewhere in the tensor. Both heads' softmax probabilities must also agree within an absolute `1e-5`.
+  - Bootstrap additionally supplies held-out Rust chunks with `export_onnx.py --parity-source PATH`. Check up to 64 evenly spaced distinct positions across the complete source, at batches 1, 7 and 32 (repeat selected positions to fill small or partial batches), keeping the stricter raw-logit absolute `1e-4` bound (no relative term). Compare policy probabilities after legal-move masking and WDL probabilities within `1e-5`. Read samples lazily through the existing chunk decoder; Python does not encode positions. Any failed check prevents bootstrap publication.
 - **Rust `ort` (`=2.0.0-rc.15`) Session Initialization:**
   - Explicitly initialize the environment first via `let env = ort::init().build()?;` and pass `&env` into `Session::builder(&env)?` with the CoreML execution provider enabled.
 
@@ -155,6 +157,7 @@ A **chunk** is a plain `.bin` file of back-to-back §3 `TrainingSample` records 
 ~~~
 - **`run.json`:** `{"format":"chessbot-run-v1","config":{…},"best_gen":3,"current_gen":4,"stage":"selfplay","resign_threshold":-0.95}`. `stage` is one of `selfplay → train → export → match → decide → anchors → prune → done`. After `done`, `current_gen += 1` and `stage = "selfplay"`.
 - **Generation 0** is the supervised net (`pipeline/bootstrap.py`). It is always promoted (`decision.json` has `"reason": "bootstrap"`).
+- **Export-only bootstrap recovery:** `pipeline/bootstrap.py --export-only` requires complete converted-data manifests, `model.pt` and `train.json`, and retries the export/publication steps without converting data or training. Missing/incomplete inputs fail without deleting the checkpoint. The original PGN and config arguments remain required; this mode does not rebuild data when PGN metadata changes.
 - **Stage idempotence (resume rule):** Every stage checks its outputs before doing any work. selfplay: chunks `0..ceil(games/games_per_chunk)-1` complete (§6). train: `model.pt` and `train.json` exist. export: `model.onnx` exists and passes `check_contract`. match: one block file per block played, then stop at the SPRT decision or `max_games`. decide: `decision.json` exists. Partial outputs (`*.tmp`, a `.pt` without `train.json`) are deleted and redone.
 - **Training a candidate:** Start from the best gen's `model.pt` with a fresh AdamW optimizer. Train on the **replay window**:
   - Self-play chunks from gens `max(1, G-W+1) .. G`, taking whole chunks newest-first until the total reaches `window.max_samples` (default `W = 4`, `max_samples = 1,000,000` ≈ 492 MB on disk, memmapped, never loaded into RAM).
