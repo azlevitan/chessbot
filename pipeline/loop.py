@@ -2,7 +2,7 @@
 
 --generations includes the resumed current generation; --until-gen is inclusive.
 When both are set the earlier bound wins. With neither, run until interrupted.
-The prune boundary is a no-op until Phase 9.4; reporting belongs to Phase 9.5.
+Pruning runs as a resumable stage; reporting belongs to Phase 9.5.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def run_loop(args) -> None:
         try:
             while last is None or state["current_gen"] <= last:
                 gen, stage = state["current_gen"], state["stage"]
-                if stage in ("prune", "done"):
+                if stage == "done":
                     proposed = dict(state)
                 else:
                     proposed = run_stage(args.run, args.engine, state)

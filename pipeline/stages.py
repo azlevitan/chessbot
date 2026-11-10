@@ -12,6 +12,7 @@ import sys
 from types import SimpleNamespace
 
 from evaluate import _cleanup, _read_block
+from prune import prune as prune_run
 from run_layout import ENGINE_BIN, REPO_ROOT
 from stage_support import (
     context, decision_ready, flags, generation_threshold, incumbent, invalidate,
@@ -171,3 +172,10 @@ def anchors(run_dir, gen, cfg, state) -> None:
             pending.replace(path)
         finally:
             _cleanup(pending)
+
+
+def prune(run_dir, gen, cfg, state) -> None:
+    """Remove eligible historical artifacts before the loop checkpoints success."""
+    if state["current_gen"] != gen:
+        raise ValueError("prune generation must match current_gen")
+    prune_run(run_dir, state, cfg)

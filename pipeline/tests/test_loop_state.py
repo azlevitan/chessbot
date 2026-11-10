@@ -10,7 +10,7 @@ import loop
 from run_layout import read_run_json
 from test_loop import bare_run, invoke
 
-REAL_STAGES = ("selfplay", "train", "export", "match", "decide", "anchors")
+REAL_STAGES = ("selfplay", "train", "export", "match", "decide", "anchors", "prune")
 
 
 def arguments(run, *options):
@@ -49,9 +49,8 @@ def test_limits_count_the_resumed_generation_and_stop_after_rollover(
     assert not (tmp_path / "loop.lock").exists()
 
 
-@pytest.mark.parametrize("initial", ["prune", "done"])
-def test_tail_resume_rolls_over_without_stage_work(tmp_path, monkeypatch, initial):
-    bare_run(tmp_path, stage=initial, current_gen=4, best_gen=4)
+def test_done_resume_rolls_over_without_stage_work(tmp_path, monkeypatch):
+    bare_run(tmp_path, stage="done", current_gen=4, best_gen=4)
     monkeypatch.setattr(loop, "run_stage", lambda *args: pytest.fail("unexpected stage"))
     loop.run_loop(arguments(tmp_path, "--generations", "1"))
     state = read_run_json(tmp_path)

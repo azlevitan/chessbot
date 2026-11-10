@@ -111,7 +111,7 @@ def main() -> int:
             cfg = normalize_config(state["config"])
             cfg["engine"] = engine
             stage = state["stage"]
-            if stage not in ("selfplay", "train", "export", "match", "decide", "anchors"):
+            if stage not in ("selfplay", "train", "export", "match", "decide", "anchors", "prune"):
                 raise ValueError(f"unsupported worker stage: {stage}")
             getattr(stages, stage)(run, state["current_gen"], cfg, state)
             with os.fdopen(int(descriptor), "w", encoding="utf-8") as result:

@@ -58,6 +58,11 @@ def test_crash_after_train_resumes_through_generation_two(
     state = read_run_json(run)
     assert state["current_gen"] == 3 and state["stage"] == "selfplay"
     assert state["config"] == original_config and "engine" not in state["config"]
+    first_promoted = read_json(one / "decision.json")["promoted"]
+    checkpoint = one / "model.pt"
+    if not first_promoted:
+        completed.pop(checkpoint)
+        assert not checkpoint.exists() and not (one / "model.onnx").exists()
     assert stamps(completed) == completed
     promoted = [0]
     for generation in (1, 2):
