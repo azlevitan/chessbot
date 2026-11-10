@@ -2,7 +2,7 @@
 
 --generations includes the resumed current generation; --until-gen is inclusive.
 When both are set the earlier bound wins. With neither, run until interrupted.
-Pruning runs as a resumable stage; reporting belongs to Phase 9.5.
+Pruning runs as a resumable stage; derived reports are rebuilt before completion.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import sys
 from config import normalize_config
 from loop_lock import LoopLockError, run_lock
 from loop_worker import run_stage
+from report import write_report
 from run_layout import read_run_json, write_run_json
 
 STAGES = ("selfplay", "train", "export", "match", "decide", "anchors", "prune", "done")
@@ -76,6 +77,10 @@ def run_loop(args) -> None:
                 else:
                     proposed = run_stage(args.run, args.engine, state)
                     validate_state(proposed)
+                # Publish derived metadata before the completion checkpoint. A
+                # saved done checkpoint from an older loop also needs reports.
+                if stage in ("prune", "done"):
+                    write_report(args.run)
                 # Simulate work published successfully but its checkpoint lost.
                 if os.environ.get("CHESSBOT_CRASH_AT") == f"{gen}:{stage}":
                     os._exit(17)
