@@ -126,13 +126,20 @@ def _validate(cfg: dict) -> None:
             raise ValueError(f"match.{field} must be strictly between 0 and 1")
 
 
-def load_config(path: str | Path) -> dict:
-    """Deep-merge a JSON object over fresh defaults and validate known fields.
+def normalize_config(values: dict) -> dict:
+    """Deep-merge saved config values over fresh defaults and validate them.
 
     Additional keys are preserved for callers (such as bootstrap's optional
     train.val_samples). Loading is platform-independent: the CPU CI host may
     inspect an M1/CoreML config without attempting to initialize that provider.
     """
-    cfg = _merge(DEFAULTS, read_json(path))
+    if not isinstance(values, dict):
+        raise ValueError("config must be a JSON object")
+    cfg = _merge(DEFAULTS, values)
     _validate(cfg)
     return cfg
+
+
+def load_config(path: str | Path) -> dict:
+    """Load a JSON configuration using the same defaults as a saved run."""
+    return normalize_config(read_json(path))
