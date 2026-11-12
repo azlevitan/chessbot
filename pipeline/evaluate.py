@@ -18,6 +18,7 @@ import sys
 
 import elo
 from run_layout import read_json, write_json_atomic
+from process_metrics import measured_run
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -140,7 +141,7 @@ def _block(args, block: int, games: int) -> tuple[int, int, int]:
                "--max-plies", str(args.max_plies), "--ep", args.ep,
                "--threads", str(args.threads)]
     try:
-        subprocess.run(command, check=True)
+        measured_run(command, unit=f"block_{block:02d}", check=True)
         counts = _read_block(temporary, args, block, games)
         temporary.replace(path)
         return counts

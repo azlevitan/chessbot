@@ -8,7 +8,6 @@ import math
 from pathlib import Path
 
 import torch
-from torch.utils.data import Subset
 
 from checkpoint import load_checkpoint, save_checkpoint
 from data.chunk_dataset import ChunkDataset, list_complete_chunks, read_sidecar
@@ -16,6 +15,7 @@ from data.replay_buffer import make_loader
 from data.sampler import WeightedSourceSampler
 from device import default_device
 from models.net import ChessNet
+from train_history import TrainingHistory, fixed_loader, train_probe, validation_indices
 from train_loop import train_steps
 
 
@@ -68,6 +68,7 @@ def parse_args(argv=None):
     parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--log-json", type=Path)
+    parser.add_argument("--history-jsonl", type=Path)
     args = parser.parse_args(argv)
     if min(args.steps, args.batch_size, args.steps_per_epoch, args.val_samples) < 1:
         parser.error("steps, batch-size, steps-per-epoch and val-samples must be positive")
@@ -82,8 +83,16 @@ def parse_args(argv=None):
     if args.device == "mps" and not torch.backends.mps.is_available():
         parser.error("mps is unavailable on this machine; use --device cpu or auto")
     args.log_json = args.log_json if args.log_json is not None else args.out.with_name("train.json")
+    args.history_jsonl = (args.history_jsonl if args.history_jsonl is not None
+                          else args.out.with_name("train_history.jsonl"))
     if args.log_json.resolve() == args.out.resolve():
         parser.error("out and log-json must be different paths")
+    protected = [args.out, args.log_json]
+    protected += [path.with_name(path.name + ".tmp") for path in protected]
+    if args.init is not None:
+        protected.append(args.init)
+    if args.history_jsonl.resolve() in {path.resolve() for path in protected}:
+        parser.error("history-jsonl must differ from checkpoints, summary and temporary outputs")
     return args
 
 
@@ -94,29 +103,59 @@ def main(argv=None) -> dict:
     sampler = WeightedSourceSampler(ranges, [s["weight"] for s in sources],
                                     args.steps * args.batch_size, args.seed)
     loader = make_loader(dataset, args.batch_size, sampler=sampler)
-    val_loader = None
+    val_loader, val_paths, val_count = None, [], 0
     if args.val is not None:
-        validation = ChunkDataset(source_paths(str(args.val)))
+        val_paths = source_paths(str(args.val))
+        validation = ChunkDataset(val_paths)
         if not len(validation):
             raise ValueError("validation requires at least one complete, nonempty chunk")
-        subset = Subset(validation, range(min(args.val_samples, len(validation))))
-        val_loader = make_loader(subset, args.batch_size, shuffle=False)
+        indices = validation_indices(len(validation), args.val_samples)
+        val_loader = fixed_loader(validation, indices, args.batch_size, args.seed)
+        val_count = len(indices)
+    protected = [Path(path) for source in sources for path in source["paths"]] + val_paths
+    protected += [path.with_suffix(".json") for path in protected]
+    if args.history_jsonl.resolve() in {path.resolve() for path in protected}:
+        raise ValueError("history-jsonl must differ from source chunks and sidecars")
+    probe_loader, probe_count = train_probe(dataset, ranges, sources, args.val_samples,
+                                           args.batch_size, args.seed)
     model = load_checkpoint(args.init) if args.init is not None else ChessNet()
     device = default_device() if args.device == "auto" else torch.device(args.device)
-    result = train_steps(model, loader, steps=args.steps, device=device, lr=args.lr,
-                         weight_decay=args.weight_decay, warmup_steps=args.warmup_steps,
-                         steps_per_epoch=args.steps_per_epoch, q_ratio=args.q_ratio,
-                         val_loader=val_loader)
-    result["sources"] = sources
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    temporary = args.out.with_name(args.out.name + ".tmp")
-    save_checkpoint(model, temporary)
-    temporary.replace(args.out)
-    log_path = args.log_json
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = log_path.with_name(log_path.name + ".tmp")
-    temporary.write_text(json.dumps(result, allow_nan=False) + "\n", encoding="utf-8")
-    temporary.replace(log_path)
+    history = TrainingHistory(args.history_jsonl, {
+        "seed": args.seed, "device": str(device), "steps": args.steps,
+        "batch_size": args.batch_size, "q_ratio": args.q_ratio, "lr": args.lr,
+        "weight_decay": args.weight_decay, "warmup_steps": args.warmup_steps,
+        "steps_per_epoch": args.steps_per_epoch, "sources": sources,
+        "working_directory": str(Path.cwd()),
+        "init_checkpoint": str(args.init.resolve()) if args.init is not None else None,
+        "train_probe": {"sampling": "fixed_source_weighted_draws", "samples": probe_count,
+                        "seed": args.seed, "q_ratio": 0.0},
+        "validation": {"paths": [str(path) for path in val_paths],
+                       "sampling": "evenly_spaced", "samples": val_count, "q_ratio": 0.0},
+    })
+    try:
+        result = train_steps(model, loader, steps=args.steps, device=device, lr=args.lr,
+                             weight_decay=args.weight_decay, warmup_steps=args.warmup_steps,
+                             steps_per_epoch=args.steps_per_epoch, q_ratio=args.q_ratio,
+                             val_loader=val_loader, train_probe_loader=probe_loader,
+                             on_record=history.record)
+        result.update(sources=sources, attempt_id=history.attempt_id,
+                      history_file=str(args.history_jsonl.resolve()))
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        temporary = args.out.with_name(args.out.name + ".tmp")
+        save_checkpoint(model, temporary)
+        temporary.replace(args.out)
+        log_path = args.log_json
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = log_path.with_name(log_path.name + ".tmp")
+        temporary.write_text(json.dumps(result, allow_nan=False) + "\n", encoding="utf-8")
+        temporary.replace(log_path)
+        history.write("complete", steps=args.steps, summary_file=str(log_path.resolve()))
+    except BaseException as error:
+        try:
+            history.failed(error)
+        except (OSError, ValueError):
+            pass  # Disk/logging failure must preserve the original exception.
+        raise
     return result
 
 

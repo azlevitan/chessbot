@@ -2,8 +2,8 @@
 
 Ladder intervals shift each match's bounds by the incumbent's point Elo; they
 describe conditional match uncertainty, not accumulated ladder uncertainty.
-Missing metrics are null in JSON and NA in TSV. Selfplay/match durations are
-not persisted by their producers, and pruned selfplay counts are unavailable.
+Missing metrics are null in JSON and NA in TSV. Measured stage spans include
+interrupted attempts, and archived selfplay diagnostics survive chunk pruning.
 No model or sample contents are read, and no training libraries are imported.
 """
 
@@ -20,6 +20,7 @@ import re
 import sys
 
 from run_layout import read_json
+from telemetry import stages_summary
 
 COLUMNS = tuple(("gen promoted reason games score elo elo_lo elo_hi ladder_elo "
                  "vs_random vs_material train_loss val_top1 selfplay_samples "
@@ -100,6 +101,12 @@ def _samples(directory: Path) -> int | None:
         except OSError:
             continue
         total, found = total + count, True
+    saved = _optional(directory / "selfplay_summary.json")
+    chunks = saved.get("chunks")
+    if (saved.get("format") == "chessbot-selfplay-summary-v1" and isinstance(chunks, list)
+            and chunks and all(isinstance(row, dict) and type(row.get("samples")) is int
+                               and row["samples"] >= 0 for row in chunks)):
+        return max(total, sum(row["samples"] for row in chunks))
     return total if found else None
 
 
@@ -137,6 +144,11 @@ def _collect(run_dir):
                    if isinstance(validation, dict) else None,
                    selfplay_samples=_samples(directory),
                    train_secs=_number(train.get("seconds"), 0))
+        measured = stages_summary(directory)
+        for stage, column in (("selfplay", "selfplay_secs"), ("train", "train_secs"),
+                              ("match", "match_secs")):
+            if stage in measured:
+                row[column] = measured[stage]["seconds"]
         rows.append(row)
     return run, ladder, rows
 

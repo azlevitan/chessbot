@@ -20,6 +20,8 @@ from stage_support import (
     update_threshold, valid_onnx,
 )
 from window import select_window, train_args
+from process_metrics import measured_run
+from analysis_selfplay import archive_selfplay, snapshot_run_selfplay
 
 
 def _inference(cfg):
@@ -52,12 +54,12 @@ def selfplay(run_dir, gen, cfg, state) -> None:
         if info is None:
             remove_outputs(binary, sidecar)
             try:
-                subprocess.run([str(cfg.get("engine", ENGINE_BIN)), "selfplay", "--model", str(model),
+                measured_run([str(cfg.get("engine", ENGINE_BIN)), "selfplay", "--model", str(model),
                                 "--games", str(expected["games"]), "--seed", str(expected["seed"]),
                                 "--out", str(binary), "--resign-threshold", str(threshold),
                                 *flags(sp, ("sims", "parallel", "leaf_batch", "max_plies", "temp_plies",
                                             "resign_consecutive", "resign_playthrough", "ep", "threads"))],
-                               check=True)
+                             unit=binary.stem, check=True)
                 info = selfplay_info(binary, expected)
                 if info is None:
                     raise ValueError(f"{binary}: selfplay did not publish a complete chunk")
@@ -68,6 +70,7 @@ def selfplay(run_dir, gen, cfg, state) -> None:
         temporary(sidecar).unlink(missing_ok=True)
         completed.append(info)
     update_threshold(completed, threshold, state)
+    archive_selfplay(candidate, sp["games"])
 
 
 def train(run_dir, gen, cfg, state) -> None:
@@ -116,14 +119,14 @@ def match(run_dir, gen, cfg, state) -> None:
     run, candidate = context(run_dir, gen)
     best = incumbent(run, gen, state)
     # evaluate validates cached blocks before any engine work and preserves mtimes.
-    subprocess.run([sys.executable, str(REPO_ROOT / "pipeline" / "evaluate.py"),
+    measured_run([sys.executable, str(REPO_ROOT / "pipeline" / "evaluate.py"),
                     "--engine", str(cfg.get("engine", ENGINE_BIN)),
                     "--a", str(candidate / "model.onnx"), "--b", str(best / "model.onnx"),
                     "--out-dir", str(candidate / "match"), "--decision", str(candidate / "decision.json"),
                     "--seed-base", str(1_000_000 * gen),
                     *flags(cfg["match"], ("sims", "block_games", "max_games", "batch", "max_plies",
                                           "elo0", "elo1", "alpha", "beta")),
-                    *flags(_inference(cfg), ("ep", "threads"))], check=True)
+                  *flags(_inference(cfg), ("ep", "threads"))], unit="evaluate", check=True)
 
 
 def decide(run_dir, gen, cfg, state) -> None:
@@ -163,11 +166,11 @@ def anchors(run_dir, gen, cfg, state) -> None:
             _read_block(path, args, 0, games)
             continue
         try:
-            subprocess.run([str(cfg.get("engine", ENGINE_BIN)), "match", "--a", args.a,
+            measured_run([str(cfg.get("engine", ENGINE_BIN)), "match", "--a", args.a,
                             "--b", opponent, "--games", str(games), "--seed", str(args.seed_base),
                             "--opening-offset", "0", "--out", str(pending),
                             *flags(cfg["match"], ("sims", "batch", "max_plies")),
-                            *flags(_inference(cfg), ("ep", "threads"))], check=True)
+                          *flags(_inference(cfg), ("ep", "threads"))], unit=f"anchor_{opponent}", check=True)
             _read_block(pending, args, 0, games)
             pending.replace(path)
         finally:
@@ -178,4 +181,5 @@ def prune(run_dir, gen, cfg, state) -> None:
     """Remove eligible historical artifacts before the loop checkpoints success."""
     if state["current_gen"] != gen:
         raise ValueError("prune generation must match current_gen")
+    snapshot_run_selfplay(run_dir)
     prune_run(run_dir, state, cfg)

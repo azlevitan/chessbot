@@ -17,6 +17,8 @@ def evaluate(model, loader, device: torch.device) -> dict[str, float]:
     was_training = model.training
     model.eval()
     samples, correct, policy_sum, wdl_sum = 0, 0, 0.0, 0.0
+    wdl_correct, brier_sum = 0, 0.0
+    entropy_sum = 0.0
     try:
         with torch.no_grad():
             for cpu_batch in loader:
@@ -26,6 +28,11 @@ def evaluate(model, loader, device: torch.device) -> dict[str, float]:
                 n = len(batch["wdl"])
                 predicted = masked_logits(policy, batch["legal_mask"]).argmax(dim=-1)
                 correct += int((predicted == batch["policy"].argmax(dim=-1)).sum())
+                wdl_correct += int((wdl.argmax(dim=-1) == batch["wdl"]).sum())
+                target = torch.nn.functional.one_hot(batch["wdl"], 3)
+                brier_sum += float(((wdl.softmax(-1) - target) ** 2).sum())
+                policy_target = batch["policy"]
+                entropy_sum -= float((policy_target * policy_target.clamp_min(1e-30).log()).sum())
                 samples += n
                 policy_sum += float(p_loss) * n
                 wdl_sum += float(v_loss) * n
@@ -34,13 +41,18 @@ def evaluate(model, loader, device: torch.device) -> dict[str, float]:
     if not samples:
         raise ValueError("validation requires at least one sample")
     return {"policy_top1": correct / samples, "policy_loss": policy_sum / samples,
-            "wdl_loss": wdl_sum / samples}
+            "wdl_loss": wdl_sum / samples, "loss": (policy_sum + wdl_sum) / samples,
+            "wdl_accuracy": wdl_correct / samples, "wdl_brier": brier_sum / samples,
+            "policy_target_entropy": entropy_sum / samples,
+            "policy_kl": (policy_sum - entropy_sum) / samples,
+            "samples": samples}
 
 
 def train_steps(
     model, loader, *, steps: int, device: torch.device, lr: float = 1e-3,
     weight_decay: float = 1e-4, warmup_steps: int = 100,
     steps_per_epoch: int = 500, q_ratio: float = 0.0, val_loader=None,
+    train_probe_loader=None, on_record=None,
 ) -> dict:
     """Train on one continuous loader stream; log block means as JSON lines.
 
@@ -56,6 +68,13 @@ def train_steps(
     samples_seen, block_steps = 0, 0
     sums = [0.0, 0.0, 0.0]
     val = None
+    probe = None
+    if on_record is not None:
+        probe = evaluate(model, train_probe_loader, device) if train_probe_loader is not None else None
+        val = evaluate(model, val_loader, device) if val_loader is not None else None
+        on_record(dict(phase="baseline", steps=0, samples_seen=0,
+                       seconds=time.perf_counter() - started, lr=lr, q_ratio=q_ratio,
+                       train=None, train_probe=probe, val=val))
     for step in range(steps):
         try:
             cpu_batch = next(batches)
@@ -78,13 +97,21 @@ def train_steps(
         del cpu_batch, batch, loss, p_loss, v_loss
         if (step + 1) % steps_per_epoch == 0 or step + 1 == steps:
             val = evaluate(model, val_loader, device) if val_loader is not None else None
+            probe = (evaluate(model, train_probe_loader, device)
+                     if train_probe_loader is not None else None)
             empty_cache(device)
             record = dict(zip(("loss", "policy_loss", "wdl_loss"),
                               (value / block_steps for value in sums)))
             record.update(steps=step + 1, samples_seen=samples_seen,
                           seconds=time.perf_counter() - started, lr=current_lr, val=val)
             print(json.dumps(record, allow_nan=False), flush=True)
+            if on_record is not None:
+                on_record(dict(phase="epoch", steps=step + 1, samples_seen=samples_seen,
+                               seconds=record["seconds"], lr=current_lr, q_ratio=q_ratio,
+                               train={key: record[key] for key in ("loss", "policy_loss", "wdl_loss")},
+                               train_probe=probe, val=val))
             sums, block_steps = [0.0, 0.0, 0.0], 0
     return {"steps": steps, "samples_seen": samples_seen,
             "seconds": time.perf_counter() - started, "final_loss": losses[0],
-            "policy_loss": losses[1], "wdl_loss": losses[2], "val": val}
+            "policy_loss": losses[1], "wdl_loss": losses[2], "val": val,
+            "train_probe": probe}

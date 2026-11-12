@@ -15,10 +15,14 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 
 from config import normalize_config
 from loop_lock import LoopLockError, stage_lock
-from run_layout import read_run_json
+from run_layout import generation_dir, read_run_json
+from generation_metadata import coverage_complete, ensure_manifest
+from process_metrics import own_peak_rss_bytes
+from telemetry import begin_attempt, finish_attempt
 
 
 def _signal_group(process, signum) -> None:
@@ -65,7 +69,27 @@ def _watch_parent(descriptor: int) -> None:
 
 def run_stage(run: Path, engine: Path, state: dict) -> dict:
     """Run one stage and return proposed state, without modifying run.json."""
+    directory = generation_dir(run, state["current_gen"])
+    ensure_manifest(directory, engine, state)
+    covered = coverage_complete(directory, state["stage"])
+    path, attempt = begin_attempt(directory / "telemetry", kind="stage", stage=state["stage"],
+                                  coverage_complete=covered, config=normalize_config(state["config"]))
+    env = {**os.environ, "CHESSBOT_METRICS_DIR": str(directory / "telemetry"),
+           "CHESSBOT_STAGE": state["stage"], "CHESSBOT_STAGE_ATTEMPT": attempt["attempt_id"]}
+    started, outcome = time.perf_counter(), "failed"
     command = [sys.executable, str(Path(__file__).resolve()), str(run), str(engine)]
+    try:
+        proposed = _execute_stage(command, run, state, env)
+        outcome = "complete"
+        return proposed
+    except KeyboardInterrupt:
+        outcome = "interrupted"
+        raise
+    finally:
+        finish_attempt(path, attempt, outcome, time.perf_counter() - started)
+
+
+def _execute_stage(command, run, state, env):
     with tempfile.TemporaryFile(mode="w+") as result, _lifeline() as lifeline:
         process = None
         # Defer SIGINT across Popen so even an interrupt during spawn has an
@@ -76,6 +100,7 @@ def run_stage(run: Path, engine: Path, state: dict) -> dict:
                 process = subprocess.Popen(
                     [*command, str(result.fileno()), str(lifeline), str(os.getpid())],
                     pass_fds=(result.fileno(), lifeline), start_new_session=True,
+                    env=env,
                 )
             finally:
                 signal.pthread_sigmask(signal.SIG_SETMASK, previous)
@@ -113,7 +138,7 @@ def main() -> int:
             stage = state["stage"]
             if stage not in ("selfplay", "train", "export", "match", "decide", "anchors", "prune"):
                 raise ValueError(f"unsupported worker stage: {stage}")
-            getattr(stages, stage)(run, state["current_gen"], cfg, state)
+            _measured_work(stages, stage, run, cfg, state)
             with os.fdopen(int(descriptor), "w", encoding="utf-8") as result:
                 json.dump(state, result, allow_nan=False)
         return 0
@@ -122,6 +147,21 @@ def main() -> int:
     except (OSError, ValueError, KeyError, LoopLockError, subprocess.SubprocessError) as error:
         print(f"loop stage: {error}", file=sys.stderr)
         return 1
+
+
+def _measured_work(stages, stage, run, cfg, state):
+    path, record = begin_attempt(Path(os.environ["CHESSBOT_METRICS_DIR"]), kind="worker", stage=stage,
+                                 stage_attempt=os.environ["CHESSBOT_STAGE_ATTEMPT"])
+    started, outcome = time.perf_counter(), "failed"
+    try:
+        getattr(stages, stage)(run, state["current_gen"], cfg, state)
+        outcome = "complete"
+    except KeyboardInterrupt:
+        outcome = "interrupted"
+        raise
+    finally:
+        finish_attempt(path, record, outcome, time.perf_counter() - started,
+                       peak_rss_bytes=own_peak_rss_bytes())
 
 
 if __name__ == "__main__":
