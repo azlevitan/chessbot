@@ -8,6 +8,15 @@ import pytest
 from run_layout import ENGINE_BIN, ENGINE_DIR, REPO_ROOT
 
 
+@pytest.fixture(scope="session", autouse=True)
+def bounded_cpu_threads():
+    """Keep temporary CPU training/export jobs from competing for excess threads."""
+    with pytest.MonkeyPatch.context() as patch:
+        for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+            patch.setenv(name, "1")
+        yield
+
+
 @pytest.fixture(scope="session")
 def repo_root():
     return REPO_ROOT

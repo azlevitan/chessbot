@@ -9,6 +9,8 @@ open data_store/runs/main/analysis/index.html
 
 The exporter uses only Python's standard library. It writes CSV tables, an input-diagnostics JSON file, and a standalone HTML report containing SVG plots. The report works offline and requires no plotting service or additional packages. Rerun the command to refresh it, including while training is active. `--out /path/to/directory` chooses another output directory. Source models and sample contents are never opened.
 
+Pipeline verification tests use temporary runs with the `ci_tiny.json` preset. Its evaluation games are capped at 40 individual moves (`max_plies: 40`) with match batch size 1; temporary training/export jobs use one CPU thread. These limits reduce the test workload on slower machines while retaining the existing timeout. The owner's Mac rerun is still required to verify its runtime there. These test settings do not change an overnight run's saved configuration. If a verification check fails, rerun that check alone before repeating the full suite.
+
 The HTML charts show training objective, fixed training-probe and held-out policy/WDL losses, policy accuracy, held-out WDL Brier score, generation validation, baseline match scores, candidate Elo with confidence intervals, the promoted ladder, SPRT progress, self-play outcomes, durations, and measured process memory. Hover over points for their values. Missing measurements remain unavailable rather than becoming zero.
 
 ## Plot-ready tables
