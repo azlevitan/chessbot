@@ -4,6 +4,7 @@
 pub mod batch_runner;
 pub mod driver;
 pub mod game;
+pub mod progress;
 pub mod resign;
 pub mod stats;
 

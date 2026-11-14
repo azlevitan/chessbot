@@ -1,13 +1,13 @@
 //! `engine selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
 //!  [--seed S] [--max-plies P] [--temp-plies T] [--no-reuse] [--ep auto|cpu|coreml] [--threads T]
-//!  [--parallel P] [--leaf-batch K]
+//!  [--parallel P] [--leaf-batch K] [--infer-batch N]
 //!  [--resign-threshold -0.95] [--resign-consecutive 3] [--resign-playthrough 0.1]`
 //!
 //! Root Dirichlet noise (alpha = 0.3, eps = 0.25) at every move. Each game is
 //! flushed in game-index order; game `i` uses seed `S + i`.
 
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
@@ -15,7 +15,8 @@ use super::chunk_writer::ChunkWriter;
 use crate::nn::infer_opts::InferOptions;
 use crate::nn::ort_infer::load_evaluator;
 use crate::nn::Evaluator;
-use crate::selfplay::batch_runner::{run_games, BatchOptions};
+use crate::selfplay::batch_runner::{run_games_with_progress, BatchOptions};
+use crate::selfplay::progress::{ProgressPhase, ProgressReporter};
 use crate::selfplay::stats::SelfPlayStats;
 use crate::selfplay::{game_samples, SelfPlayConfig};
 
@@ -50,7 +51,7 @@ pub fn parse_args(args: &[String]) -> Result<SelfPlayArgs> {
                 let value = it.next().context("--model requires a path or uniform")?;
                 model = (value != "uniform").then(|| PathBuf::from(value));
             }
-            "--ep" | "--threads" => {
+            "--ep" | "--threads" | "--infer-batch" => {
                 let value = it
                     .next()
                     .with_context(|| format!("{arg} requires a value"))?;
@@ -104,6 +105,7 @@ pub fn generate(
         out,
         "uniform",
         BatchOptions::default(),
+        None,
     )
 }
 
@@ -115,12 +117,13 @@ fn generate_with_model(
     out: &Path,
     model: &str,
     batch: BatchOptions,
+    progress: Option<&ProgressReporter>,
 ) -> Result<u64> {
     batch.validate(cfg)?;
     let mut writer = ChunkWriter::create(out)?;
     let mut stats = SelfPlayStats::default();
     let start = Instant::now();
-    run_games(eval, games, seed, cfg, batch, |i, game| {
+    run_games_with_progress(eval, games, seed, cfg, batch, |i, game| {
         for s in &game_samples(&game) {
             writer.write(s)?;
         }
@@ -136,13 +139,24 @@ fn generate_with_model(
             writer.count()
         );
         Ok(())
+    }, |mut snapshot| {
+        if let Some(reporter) = progress {
+            if snapshot.phase == ProgressPhase::Complete { snapshot.phase = ProgressPhase::Writing; }
+            reporter.update(snapshot);
+        }
     })?;
-    writer.finish(stats.sidecar(model, seed, cfg))
+    let count = writer.finish(stats.sidecar(model, seed, cfg))?;
+    if let Some(reporter) = progress { reporter.set_phase(ProgressPhase::Complete); }
+    Ok(count)
 }
 
 pub fn run(args: &[String]) -> Result<()> {
     let a = parse_args(args)?;
-    let mut eval = load_evaluator(a.model.as_deref(), &a.infer_opts)?;
+    let progress = ProgressReporter::stderr(a.games, Duration::from_secs(5));
+    let mut eval = load_evaluator(a.model.as_deref(), &a.infer_opts).map_err(|error| {
+        progress.set_phase(ProgressPhase::Failed);
+        error
+    })?;
     eprintln!(
         "selfplay: model {}, {} games, {} sims, seed {}",
         a.model
@@ -164,7 +178,11 @@ pub fn run(args: &[String]) -> Result<()> {
         &a.out,
         &model,
         a.batch,
-    )?;
+        Some(&progress),
+    ).map_err(|error| {
+        progress.set_phase(ProgressPhase::Failed);
+        error
+    })?;
     println!("wrote {n} samples to {}", a.out.display());
     Ok(())
 }

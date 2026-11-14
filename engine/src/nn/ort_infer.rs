@@ -11,6 +11,7 @@ use ort::session::Session;
 use ort::value::Tensor;
 
 use super::{Evaluator, NetOutput};
+use super::fixed_batch::FixedBatchEvaluator;
 use super::infer_opts::InferOptions;
 #[cfg(target_os = "macos")]
 use super::infer_opts::Ep;
@@ -57,12 +58,23 @@ pub struct OrtEvaluator {
 
 impl OrtEvaluator {
     pub fn new(model_path: &Path, opts: &InferOptions) -> Result<Self> {
+        Self::new_with_memory_pattern(model_path, opts, true)
+    }
+
+    /// Diagnostic control; production callers keep the existing ORT default.
+    pub fn new_with_memory_pattern(
+        model_path: &Path,
+        opts: &InferOptions,
+        enabled: bool,
+    ) -> Result<Self> {
         opts.validate()?;
         let env = shared_environment()?;
         let mut builder = Session::builder(&env)
             .map_err(|e| anyhow!("creating session builder: {e}"))?
             .with_intra_threads(opts.threads)
-            .map_err(|e| anyhow!("setting intra-op threads: {e}"))?;
+            .map_err(|e| anyhow!("setting intra-op threads: {e}"))?
+            .with_memory_pattern(enabled)
+            .map_err(|e| anyhow!("setting memory pattern optimization: {e}"))?;
         // CoreML registration failure is non-fatal: ORT falls back to the CPU EP.
         #[cfg(target_os = "macos")]
         if opts.ep != Ep::Cpu {
@@ -110,13 +122,21 @@ impl Evaluator for OrtEvaluator {
     }
 }
 
-/// `Some(path)` -> ONNX model, `None` -> uniform dummy evaluator.
+/// `Some(path)` -> ONNX model with optional fixed physical batches; `None` -> uniform.
 pub fn load_evaluator(model_path: Option<&Path>, opts: &InferOptions) -> Result<Box<dyn Evaluator>> {
     opts.validate()?;
     match model_path {
-        Some(path) => Ok(Box::new(
-            OrtEvaluator::new(path, opts).with_context(|| format!("model {}", path.display()))?,
-        )),
+        Some(path) => {
+            let raw: Box<dyn Evaluator> = Box::new(
+                OrtEvaluator::new(path, opts).with_context(|| format!("model {}", path.display()))?);
+            match opts.infer_batch {
+                Some(width) => {
+                    eprintln!("inference: fixed physical batch {width} (logical rows preserved)");
+                    Ok(Box::new(FixedBatchEvaluator::new(raw, width)?))
+                }
+                None => Ok(raw),
+            }
+        }
         None => Ok(Box::new(UniformEvaluator)),
     }
 }

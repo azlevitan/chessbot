@@ -91,6 +91,8 @@ def _validate(cfg: dict) -> None:
     for section in ("selfplay", "match"):
         _integer(cfg[section]["sims"], f"{section}.sims", 2, 2**32 - 1)
         _integer(cfg[section]["max_plies"], f"{section}.max_plies", 1, 2**32 - 1)
+        if cfg[section].get("infer_batch") is not None:
+            _integer(cfg[section]["infer_batch"], f"{section}.infer_batch", 1, 64)
     _integer(sp["temp_plies"], "selfplay.temp_plies", 0, 2**32 - 1)
     _integer(sp["resign_consecutive"], "selfplay.resign_consecutive", 1, 2**32 - 1)
     _integer(train["warmup_steps"], "train.warmup_steps", 0)

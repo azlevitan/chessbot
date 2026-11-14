@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["checkpoint", "device", "export_onnx", "losses", "onnx_parity", "schedule", "train", "train_loop"]
+py-modules = ["checkpoint", "device", "export_onnx", "export_diagnostics", "export_probe_cases", "parity_diagnostics", "losses", "onnx_parity", "schedule", "train", "train_history", "train_loop"]
 
 [tool.setuptools.packages.find]
 include = ["data*", "models*"]

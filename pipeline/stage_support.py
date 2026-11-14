@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 
+from process_metrics import measured_run
+
 from run_layout import REPO_ROOT, generation_dir, read_json, write_json_atomic
 
 
@@ -73,18 +75,18 @@ def flags(values: dict, keys) -> list[str]:
 
 
 def training_process(script: str, *arguments) -> None:
-    subprocess.run([sys.executable, str(REPO_ROOT / "training" / script),
-                    *map(str, arguments)], check=True)
+    measured_run([sys.executable, str(REPO_ROOT / "training" / script),
+                  *map(str, arguments)], unit=script, check=True)
 
 
 def valid_onnx(path: Path) -> bool:
     if not path.is_file():
         return False
     try:
-        subprocess.run(
+        measured_run(
             [sys.executable, "-c", "import sys; from export_onnx import check_contract; "
              "check_contract(sys.argv[1])", str(path)], cwd=REPO_ROOT / "training",
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            unit="check_contract", check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except subprocess.CalledProcessError:
         return False

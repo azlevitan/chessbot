@@ -70,6 +70,10 @@ def test_crash_after_train_resumes_through_generation_two(
         decision = read_json(directory / "decision.json")
         if decision["promoted"]:
             promoted.append(generation)
+        for path in (directory / "match").glob("block_*.json"):
+            report = read_json(path)
+            assert report["max_plies"] == original_config["match"]["max_plies"]
+            assert all(result["plies"] <= report["max_plies"] for result in report["results"])
         binaries = sorted((directory / "selfplay").glob("chunk_*.bin"))
         sidecars = sorted((directory / "selfplay").glob("chunk_*.json"))
         assert [path.name for path in binaries] == ["chunk_000000.bin", "chunk_000001.bin"]
