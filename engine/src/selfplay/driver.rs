@@ -51,6 +51,10 @@ impl GameDriver {
         self.finished.is_some()
     }
 
+    pub fn played_plies(&self) -> usize {
+        self.history.len() - 1
+    }
+
     /// The guard reserves paths until results arrive, rolling back on failure.
     pub(crate) fn step_request(&mut self, leaf_batch: usize) -> Option<PendingBatch<'_>> {
         if self.is_finished() {

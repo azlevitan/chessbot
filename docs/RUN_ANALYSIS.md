@@ -63,6 +63,14 @@ Self-play snapshots are saved as `gens/gen_GGGG/selfplay_summary.json` outside t
 
 ## Time, memory and resumption
 
+### Checking a quiet self-play run
+
+The engine prints a progress line every five seconds, even before a game finishes. Read `moves` and `eval_positions` across successive lines: increasing values show actual moves or successful model evaluations. `first_game=1:ply12` means the first game has played 12 individual moves. `completed` includes finished games waiting for an earlier game; `emitted` counts games written in the required order. A saved chunk still requires the final `.bin` and `.json` files.
+
+`phase=loading_model` identifies startup. `phase=evaluating` with a growing `in_flight` duration and unchanged evaluation/move counts shows one evaluation has not returned; a changing elapsed-time display alone does not establish progress. `since_progress` measures time since a move, successful evaluation, completion or write count changed. Keep several successive lines when diagnosing a stall. A short probe completing four moves does not establish full-game speed or an eight-hour generation ETA.
+
+Existing run files and their measurements should be preserved after interruption. Restart through `pipeline/loop.py`; an unfinished chunk will be regenerated. Probe outputs belong in a separate `work/` folder. The overnight preset remains a workload to measure, and M2's eight-hour target requires measured generation results.
+
 Stage elapsed time is summed across all recorded attempts, including work lost to interruption or failure. Process durations are retained separately and must not be added again to stage totals. Measured stage spans include setup/validation and retries. `train_attempt_seconds` retains the trainer's narrower successful-attempt duration, including its probe/validation evaluations; it is not pure optimizer time. `train_seconds` prefers complete stage telemetry and falls back to that legacy duration only when no training stage ledger exists.
 
 `stage_summary.csv` reports `rss_complete` per stage. Process records include measurement method, platform and byte-normalized peak RSS. `recorded_rss_complete` in the generation table describes available attempted stages only. Full-generation `rss_complete` also requires a finished generation and all seven stage boundaries, so an early live run cannot accidentally claim complete memory evidence. Peak RSS is the largest recorded process peak, not the sum of independently attained peaks and not a measure of total unified GPU/system memory.
