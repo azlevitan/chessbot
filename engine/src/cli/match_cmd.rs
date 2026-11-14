@@ -13,7 +13,7 @@ use crate::nn::infer_opts::InferOptions;
 const USAGE: &str = "usage: engine match --a <PLAYER> --b <PLAYER> --games <N even>
     --sims <S> --seed <X> --out <match.json>
     [--openings <file>] [--opening-offset 0] [--max-plies 300] [--batch 8]
-    [--moves-out <txt>] [--ep auto|cpu|coreml] [--threads 1]
+    [--moves-out <txt>] [--ep auto|cpu|coreml] [--threads 1] [--infer-batch N]
 PLAYER is an ONNX path, uniform, material, or random.
 Opening books contain 50 distinct legal UCI sequences of 2–8 plies.
 The ply cap includes opening moves and must accommodate each selected opening.";
@@ -45,7 +45,7 @@ fn parse_args(args: &[String]) -> Result<MatchArgs> {
                 flag.as_str(),
                 "--a" | "--b" | "--games" | "--sims" | "--seed" | "--out"
                     | "--openings" | "--opening-offset" | "--max-plies" | "--batch"
-                    | "--moves-out" | "--ep" | "--threads"
+                    | "--moves-out" | "--ep" | "--threads" | "--infer-batch"
             ),
             "unknown argument for match: {flag}"
         );
@@ -62,7 +62,7 @@ fn parse_args(args: &[String]) -> Result<MatchArgs> {
             "--opening-offset" => opening_offset = number(flag, value)?,
             "--max-plies" => max_plies = number(flag, value)?,
             "--batch" => batch = number(flag, value)?,
-            "--ep" | "--threads" => {
+            "--ep" | "--threads" | "--infer-batch" => {
                 infer.parse_flag(flag, value)?;
             }
             _ => unreachable!(),

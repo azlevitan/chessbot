@@ -19,6 +19,7 @@ const FORMAT: &str = "chessbot-infer-bench-v1";
 const USAGE: &str = "usage: engine infer-bench --model <path.onnx>
     [--ep cpu|coreml|auto] [--threads 1] [--batches 32,31,32,20]
     [--cycles 5] [--repeat 2] [--memory-pattern on|off] [--pad-to N]
+    [--verify-fixed N] (compare fixed-batch inference with an exact-shape session)
 Measure exact batch shapes through one ORT session; stream JSONL measurements.
 Each requested batch repeats before changing size. Batches/padding: 1..64;
 at most 10,000 calls. Padding is diagnostic only and uses zero-filled extra rows.";
@@ -31,6 +32,7 @@ struct Args {
     repeat: usize,
     memory_pattern: bool,
     pad_to: Option<usize>,
+    verify_fixed: Option<usize>,
 }
 
 fn number(flag: &str, text: &str) -> Result<usize> {
@@ -40,14 +42,14 @@ fn number(flag: &str, text: &str) -> Result<usize> {
 fn parse(args: &[String]) -> Result<Args> {
     let mut model = None;
     let mut a = Args {
-        model: PathBuf::new(), infer: InferOptions { ep: Ep::Cpu, threads: 1 },
+        model: PathBuf::new(), infer: InferOptions { ep: Ep::Cpu, threads: 1, ..InferOptions::default() },
         batches: vec![32, 31, 32, 20], cycles: 5, repeat: 2,
-        memory_pattern: true, pad_to: None,
+        memory_pattern: true, pad_to: None, verify_fixed: None,
     };
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         ensure!(matches!(flag.as_str(), "--model" | "--ep" | "--threads" | "--batches"
-                         | "--cycles" | "--repeat" | "--memory-pattern" | "--pad-to"),
+                         | "--cycles" | "--repeat" | "--memory-pattern" | "--pad-to" | "--verify-fixed"),
                 "unknown argument for infer-bench: {flag}");
         let value = it.next().with_context(|| format!("{flag} requires a value"))?;
         match flag.as_str() {
@@ -59,6 +61,7 @@ fn parse(args: &[String]) -> Result<Args> {
             "--cycles" => a.cycles = number(flag, value)?,
             "--repeat" => a.repeat = number(flag, value)?,
             "--pad-to" => a.pad_to = Some(number(flag, value)?),
+            "--verify-fixed" => a.verify_fixed = Some(number(flag, value)?),
             "--memory-pattern" => a.memory_pattern = match value.as_str() {
                 "on" => true, "off" => false,
                 _ => bail!("--memory-pattern must be on or off"),
@@ -76,6 +79,10 @@ fn parse(args: &[String]) -> Result<Args> {
     if let Some(pad) = a.pad_to {
         ensure!((1..=64).contains(&pad) && a.batches.iter().all(|b| *b <= pad),
                 "--pad-to must be in 1..64 and cover every requested batch");
+    }
+    if let Some(width) = a.verify_fixed {
+        ensure!((1..=64).contains(&width), "--verify-fixed must be in 1..64");
+        ensure!(a.pad_to.is_none(), "--verify-fixed cannot be combined with --pad-to");
     }
     a.infer.validate()?;
     Ok(a)
@@ -109,6 +116,9 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     let mut a = parse(args)?;
     a.model = a.model.canonicalize().with_context(|| format!("opening model {}", a.model.display()))?;
+    if let Some(width) = a.verify_fixed {
+        return super::infer_parity::run(&a.model, &a.infer, a.memory_pattern, width);
+    }
     eprintln!("infer-bench: loading {} (selected provider {}; CPU fallback may apply)",
               a.model.display(), ep_name(a.infer.ep));
     let load = Instant::now();

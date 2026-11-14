@@ -86,6 +86,32 @@ def run_case(engine, model, directory, provider, tuning, timeout):
     return row
 
 
+def run_parity(engine, model, directory, provider, width, timeout):
+    output = directory / (provider + "_parity.jsonl")
+    errors = directory / (provider + "_parity.stderr.log")
+    command = [str(engine), "infer-bench", "--model", str(model), "--ep", provider,
+               "--threads", "1", "--verify-fixed", str(width)]
+    row = {"provider": provider, "tuning": "parity", "fixed_batch": width,
+           "status": "failed", "command": command, "jsonl": str(output), "stderr": str(errors)}
+    print(f"Checking {provider} prediction parity (limit {timeout:g}s)...", flush=True)
+    try:
+        with output.open("w") as stdout, errors.open("w") as stderr:
+            completed = subprocess.run(command, stdout=stdout, stderr=stderr, timeout=timeout)
+        records = [json.loads(line) for line in output.read_text().splitlines() if line.strip()]
+        summary = next(record for record in records if record.get("kind") == "summary")
+        if completed.returncode or summary.get("pass") is not True or summary.get("batches_checked") != 7:
+            raise ValueError(f"prediction parity failed; see {output} and {errors}")
+        row.update(status="complete", batches_checked=7)
+        print(f"  PASS: all seven group sizes preserve predictions within tolerance", flush=True)
+    except subprocess.TimeoutExpired:
+        row.update(status="timeout", error=f"exceeded {timeout:g} seconds")
+        print(f"  TIMEOUT: {row['error']}; partial records retained", flush=True)
+    except (OSError, ValueError, KeyError, StopIteration) as error:
+        row["error"] = str(error)
+        print(f"  FAILED: {error}", flush=True)
+    return row
+
+
 def positive(value):
     result = float(value)
     if not 0 < result <= 300:
@@ -99,6 +125,8 @@ def main(argv=None):
     parser.add_argument("--engine", type=Path, default=ENGINE_BIN)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--timeout", type=positive, default=30)
+    parser.add_argument("--verify-fixed", type=int, choices=range(1, 65), metavar="1..64",
+                        help="check prediction parity instead of collecting timing comparisons")
     parser.add_argument("--providers", nargs="+", choices=("cpu", "coreml"),
                         default=["cpu", "coreml"] if sys.platform == "darwin" else ["cpu"])
     args = parser.parse_args(argv)
@@ -114,16 +142,21 @@ def main(argv=None):
     with model.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
-    rows = [run_case(engine, model, directory, provider, tuning, args.timeout)
-            for provider in args.providers for tuning in TUNINGS]
+    if args.verify_fixed is not None:
+        rows = [run_parity(engine, model, directory, provider, args.verify_fixed, args.timeout)
+                for provider in args.providers]
+    else:
+        rows = [run_case(engine, model, directory, provider, tuning, args.timeout)
+                for provider in args.providers for tuning in TUNINGS]
     result = {"format": "chessbot-infer-probe-v1", "model": str(model),
               "model_sha256": digest.hexdigest(), "timeout_seconds": args.timeout,
+              "verify_fixed": args.verify_fixed,
               "note": "Provider labels describe selection; CPU fallback remains possible.",
               "cases": rows}
     (directory / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
     fields = ("provider", "tuning", "status", "calls", "load_seconds", "inference_seconds",
               "first_cycle_seconds", "change_ms", "repeat_ms", "requested_positions",
-              "physical_positions", "requested_positions_per_sec")
+              "physical_positions", "requested_positions_per_sec", "fixed_batch", "batches_checked")
     with (directory / "summary.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()

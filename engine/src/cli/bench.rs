@@ -18,7 +18,7 @@ use crate::nn::ort_infer::load_evaluator;
 use crate::nn::{Evaluator, NetOutput};
 
 const USAGE: &str = "usage: engine bench [--model <onnx>|uniform] [--sims 800]
-    [--batch 8] [--positions 6] [--ep auto|cpu|coreml] [--threads 1]
+    [--batch 8] [--positions 6] [--ep auto|cpu|coreml] [--threads 1] [--infer-batch N]
 Search the first 1..6 fixed positions, with a fresh tree for each.
 Print one JSON line with completed simulations, evaluations and throughput.";
 
@@ -83,7 +83,7 @@ fn parse_args(args: &[String]) -> Result<BenchArgs> {
         ensure!(
             matches!(
                 flag.as_str(),
-                "--model" | "--sims" | "--batch" | "--positions" | "--ep" | "--threads"
+                "--model" | "--sims" | "--batch" | "--positions" | "--ep" | "--threads" | "--infer-batch"
             ),
             "unknown argument for bench: {flag}"
         );
@@ -95,7 +95,7 @@ fn parse_args(args: &[String]) -> Result<BenchArgs> {
             "--sims" => a.sims = number(flag, value)?,
             "--batch" => a.batch = number(flag, value)?,
             "--positions" => a.positions = number(flag, value)?,
-            "--ep" | "--threads" => {
+            "--ep" | "--threads" | "--infer-batch" => {
                 a.infer.parse_flag(flag, value)?;
             }
             _ => unreachable!(),

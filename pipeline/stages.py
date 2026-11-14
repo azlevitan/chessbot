@@ -25,13 +25,18 @@ from analysis_selfplay import archive_selfplay, snapshot_run_selfplay
 
 
 def _inference(cfg):
-    return {key: cfg["match"].get(key, cfg["selfplay"][key]) for key in ("ep", "threads")}
+    values = {key: cfg["match"].get(key, cfg["selfplay"][key]) for key in ("ep", "threads")}
+    batch = cfg["match"].get("infer_batch", cfg["selfplay"].get("infer_batch"))
+    if batch is not None:
+        values["infer_batch"] = batch
+    return values
 
 
 def selfplay(run_dir, gen, cfg, state) -> None:
     run, candidate = context(run_dir, gen)
     model = incumbent(run, gen, state) / "model.onnx"
     sp = cfg["selfplay"]
+    options = {key: value for key, value in sp.items() if value is not None}
     directory = candidate / "selfplay"
     count = (sp["games"] + sp["games_per_chunk"] - 1) // sp["games_per_chunk"]
     chunks = []
@@ -57,8 +62,8 @@ def selfplay(run_dir, gen, cfg, state) -> None:
                 measured_run([str(cfg.get("engine", ENGINE_BIN)), "selfplay", "--model", str(model),
                                 "--games", str(expected["games"]), "--seed", str(expected["seed"]),
                                 "--out", str(binary), "--resign-threshold", str(threshold),
-                                *flags(sp, ("sims", "parallel", "leaf_batch", "max_plies", "temp_plies",
-                                            "resign_consecutive", "resign_playthrough", "ep", "threads"))],
+                                *flags(options, ("sims", "parallel", "leaf_batch", "max_plies", "temp_plies",
+                                            "resign_consecutive", "resign_playthrough", "ep", "threads", "infer_batch"))],
                              unit=binary.stem, check=True)
                 info = selfplay_info(binary, expected)
                 if info is None:
@@ -126,7 +131,7 @@ def match(run_dir, gen, cfg, state) -> None:
                     "--seed-base", str(1_000_000 * gen),
                     *flags(cfg["match"], ("sims", "block_games", "max_games", "batch", "max_plies",
                                           "elo0", "elo1", "alpha", "beta")),
-                  *flags(_inference(cfg), ("ep", "threads"))], unit="evaluate", check=True)
+                  *flags(_inference(cfg), ("ep", "threads", "infer_batch"))], unit="evaluate", check=True)
 
 
 def decide(run_dir, gen, cfg, state) -> None:
@@ -170,7 +175,7 @@ def anchors(run_dir, gen, cfg, state) -> None:
                             "--b", opponent, "--games", str(games), "--seed", str(args.seed_base),
                             "--opening-offset", "0", "--out", str(pending),
                             *flags(cfg["match"], ("sims", "batch", "max_plies")),
-                          *flags(_inference(cfg), ("ep", "threads"))], unit=f"anchor_{opponent}", check=True)
+                          *flags(_inference(cfg), ("ep", "threads", "infer_batch"))], unit=f"anchor_{opponent}", check=True)
             _read_block(pending, args, 0, games)
             pending.replace(path)
         finally:

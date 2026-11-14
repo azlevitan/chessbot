@@ -152,3 +152,18 @@ def test_cpu_probe_runs_three_bounded_cases_and_publishes_auditable_summary(
     assert len(rows) == 3
     assert {row["status"] for row in rows} == {"complete"}
     assert {row["calls"] for row in rows} == {"40"}
+
+
+def test_cpu_parity_reports_only_successful_complete_checks(tmp_path, engine_bin, repo_root):
+    model = repo_root / "engine/tests/fixtures/match_uniform.onnx"
+    output = tmp_path / "parity"
+    assert main(["--model", str(model), "--engine", str(engine_bin), "--providers", "cpu",
+                 "--verify-fixed", "32", "--out", str(output)]) == 0
+    report = json.loads((output / "summary.json").read_text())
+    assert report["verify_fixed"] == 32 and len(report["cases"]) == 1
+    case = report["cases"][0]
+    assert case["status"] == "complete" and case["batches_checked"] == 7
+    assert "change_ms" not in case
+    raw = [json.loads(line) for line in Path(case["jsonl"]).read_text().splitlines()]
+    assert [r["requested_batch"] for r in raw if r["kind"] == "parity"] == [1, 7, 20, 31, 32, 33, 65]
+    assert raw[-1]["pass"] is True

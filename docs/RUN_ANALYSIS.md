@@ -88,6 +88,40 @@ Results go to a new local `~/Library/Logs/chessbot/infer-probe-*` directory on m
 
 The equivalent individual command is `engine infer-bench --model PATH --ep cpu --batches 32,31,32,20 --cycles 5 --repeat 2 --memory-pattern on`. Add `--pad-to 32` for fixed-size inputs or use `--memory-pattern off` to isolate that setting. Batches are capped at 64 and only one call's outputs are retained. These diagnostics establish model-call behavior; full-generation duration and actual process RSS still require an M2 run. Preserving complete chunks on resume remains a separate acceptance check.
 
+### Enabling fixed inference for an existing M1 run
+
+`--infer-batch 32` makes every underlying ONNX call use 32 rows. Smaller requests are zero-padded; requests larger than 32 are split into ordered calls with a padded tail. Padding does not add simulations, games or saved samples. The adapter retains one model session. Both CPU and CoreML selection support it. The M1 preset enables 32 for self-play and matches, while default inference and the CPU CI preset remain dynamic.
+
+Changing the preset file does not update a saved run. Pause the real loop with one Ctrl-C and wait for cleanup before building or changing its saved configuration. First check the owner's model through the actual production adapter:
+
+```bash
+~/.venvs/chessbot/bin/python pipeline/infer_probe.py \
+  --model data_store/runs/main/gens/gen_0000/model.onnx \
+  --providers cpu coreml --verify-fixed 32 --timeout 60
+```
+
+This prints PASS only after all seven requested sizes preserve raw logits and output probabilities within the recorded tolerances. It uses mixed Rust-encoded benchmark positions and tests padding and split boundaries. Raw comparisons are saved under the local Logs directory. Stop on a failed comparison; a latency win alone does not establish prediction parity. Small floating-point differences within tolerance can still change individual game trajectories.
+
+After both providers pass, apply the setting to the stopped run:
+
+```bash
+~/.venvs/chessbot/bin/python pipeline/set_inference_batch.py \
+  --run data_store/runs/main --batch 32
+```
+
+The helper uses the loop's lock, refuses a live owner/worker, saves the exact old `run.json`, and fingerprints every complete self-play chunk in the current generation before updating only `selfplay.infer_batch` and `match.infer_batch`. It prints the new backup directory, outside the run. Existing outputs, generation manifests and telemetry stay in place; future stage attempts record the new effective configuration. Incomplete chunks are omitted from the fingerprint manifest and regenerated normally on resume. A published chunk with corrupt metadata or a wrong binary size blocks the update.
+
+Resume with the same `pipeline/loop.py --until-gen 1` command and a console log under `~/Library/Logs/chessbot`. The startup line `inference: fixed physical batch 32` confirms the adapter is active. Heartbeat `batch_positions` and `eval_positions` continue to count real requested inputs, so their values may be below 32. Confirm sustained progress and completed-batch runtime before making another overnight estimate.
+
+After the loop finishes or is stopped again, verify the previously complete chunks using the printed backup path:
+
+```bash
+~/.venvs/chessbot/bin/python pipeline/set_inference_batch.py \
+  --run data_store/runs/main --verify-saved /path/printed/by/the/setup/helper
+```
+
+This checks bytes, SHA-256 and modification times. It establishes preservation only for the recorded complete chunks, and needs a nonzero recorded chunk count to provide resume evidence. An earlier attempt that already exceeded eight hours remains a timing failure: its measurements are retained. Finish that generation as a trial if useful, then measure a fresh generation against M2's complete time, RSS and interruption/resumption criteria.
+
 Stage elapsed time is summed across all recorded attempts, including work lost to interruption or failure. Process durations are retained separately and must not be added again to stage totals. Measured stage spans include setup/validation and retries. `train_attempt_seconds` retains the trainer's narrower successful-attempt duration, including its probe/validation evaluations; it is not pure optimizer time. `train_seconds` prefers complete stage telemetry and falls back to that legacy duration only when no training stage ledger exists.
 
 `stage_summary.csv` reports `rss_complete` per stage. Process records include measurement method, platform and byte-normalized peak RSS. `recorded_rss_complete` in the generation table describes available attempted stages only. Full-generation `rss_complete` also requires a finished generation and all seven stage boundaries, so an early live run cannot accidentally claim complete memory evidence. Peak RSS is the largest recorded process peak, not the sum of independently attained peaks and not a measure of total unified GPU/system memory.

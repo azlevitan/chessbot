@@ -177,7 +177,8 @@ def test_config_deep_merge_list_replacement_and_independence(tmp_path, cfg):
 def test_presets_match_required_values(cfg):
     directory = REPO_ROOT / "pipeline" / "configs"
     overnight = load_config(directory / "m1_overnight.json")
-    assert overnight == {**cfg, "selfplay": {**cfg["selfplay"], "ep": "coreml"}}
+    assert overnight == {**cfg, "selfplay": {**cfg["selfplay"], "ep": "coreml", "infer_batch": 32},
+                         "match": {**cfg["match"], "infer_batch": 32}}
     tiny = load_config(directory / "ci_tiny.json")
     overrides = {"selfplay": {"games": 4, "games_per_chunk": 2, "sims": 16,
         "parallel": 4, "max_plies": 40, "temp_plies": 10, "ep": "cpu"},

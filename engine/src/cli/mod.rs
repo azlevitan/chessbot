@@ -7,5 +7,6 @@ mod pgn_output;
 pub mod convert_pgn;
 pub mod dump_vectors;
 pub mod infer_bench;
+mod infer_parity;
 pub mod match_cmd;
 pub mod selfplay;

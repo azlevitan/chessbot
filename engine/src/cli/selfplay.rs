@@ -1,6 +1,6 @@
 //! `engine selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
 //!  [--seed S] [--max-plies P] [--temp-plies T] [--no-reuse] [--ep auto|cpu|coreml] [--threads T]
-//!  [--parallel P] [--leaf-batch K]
+//!  [--parallel P] [--leaf-batch K] [--infer-batch N]
 //!  [--resign-threshold -0.95] [--resign-consecutive 3] [--resign-playthrough 0.1]`
 //!
 //! Root Dirichlet noise (alpha = 0.3, eps = 0.25) at every move. Each game is
@@ -51,7 +51,7 @@ pub fn parse_args(args: &[String]) -> Result<SelfPlayArgs> {
                 let value = it.next().context("--model requires a path or uniform")?;
                 model = (value != "uniform").then(|| PathBuf::from(value));
             }
-            "--ep" | "--threads" => {
+            "--ep" | "--threads" | "--infer-batch" => {
                 let value = it
                     .next()
                     .with_context(|| format!("{arg} requires a value"))?;

@@ -11,6 +11,7 @@ use ort::session::Session;
 use ort::value::Tensor;
 
 use super::{Evaluator, NetOutput};
+use super::fixed_batch::FixedBatchEvaluator;
 use super::infer_opts::InferOptions;
 #[cfg(target_os = "macos")]
 use super::infer_opts::Ep;
@@ -121,13 +122,21 @@ impl Evaluator for OrtEvaluator {
     }
 }
 
-/// `Some(path)` -> ONNX model, `None` -> uniform dummy evaluator.
+/// `Some(path)` -> ONNX model with optional fixed physical batches; `None` -> uniform.
 pub fn load_evaluator(model_path: Option<&Path>, opts: &InferOptions) -> Result<Box<dyn Evaluator>> {
     opts.validate()?;
     match model_path {
-        Some(path) => Ok(Box::new(
-            OrtEvaluator::new(path, opts).with_context(|| format!("model {}", path.display()))?,
-        )),
+        Some(path) => {
+            let raw: Box<dyn Evaluator> = Box::new(
+                OrtEvaluator::new(path, opts).with_context(|| format!("model {}", path.display()))?);
+            match opts.infer_batch {
+                Some(width) => {
+                    eprintln!("inference: fixed physical batch {width} (logical rows preserved)");
+                    Ok(Box::new(FixedBatchEvaluator::new(raw, width)?))
+                }
+                None => Ok(raw),
+            }
+        }
         None => Ok(Box::new(UniformEvaluator)),
     }
 }

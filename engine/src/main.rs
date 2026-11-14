@@ -11,25 +11,26 @@ use engine::uci::uci_loop;
 const USAGE: &str = "usage: engine [command] [args]
 
 commands:
-  uci [--model <path.onnx>|uniform] [--ep auto|cpu|coreml] [--threads T]
+  uci [--model <path.onnx>|uniform] [--ep auto|cpu|coreml] [--threads T] [--infer-batch N]
                                      UCI loop (default; uniform net without --model)
   dump-test-vectors [--out <path>]   write contract test vectors
   bench [--model <onnx>|uniform] [--sims 800] [--batch 8] [--positions 6]
-        [--ep auto|cpu|coreml] [--threads T]
+        [--ep auto|cpu|coreml] [--threads T] [--infer-batch N]
                                      fixed-position search throughput (JSON)
   infer-bench --model <onnx> [--batches 32,31,32,20] [--cycles 5] [--repeat 2]
         [--ep auto|cpu|coreml] [--threads T] [--memory-pattern on|off] [--pad-to N]
+        [--verify-fixed N]
                                      direct model-call timing (JSONL)
   match --a <PLAYER> --b <PLAYER> --games <N even> --sims <S> --seed <X> --out <json>
         [--openings <file>] [--opening-offset 0] [--max-plies 300] [--batch 8]
-        [--moves-out <txt>] [--ep auto|cpu|coreml] [--threads T]
+        [--moves-out <txt>] [--ep auto|cpu|coreml] [--threads T] [--infer-batch N]
                                      paired evaluation (onnx, uniform, material, random)
   convert-pgn --input <pgn>|- (--out <bin> | --out-dir <dir>)
               [--chunk-samples 262144] [--max-games N] [--max-samples M] [--skip-games K]
                                      PGN games -> supervised training samples
   selfplay [--model <onnx>|uniform] --games <N> --sims 200 --out <bin>
            [--seed S] [--max-plies 512] [--temp-plies 30] [--ep auto|cpu|coreml] [--threads T]
-           [--no-reuse]
+           [--no-reuse] [--infer-batch N]
                                      self-play with root Dirichlet noise";
 
 fn run_uci(args: &[String]) -> Result<()> {
@@ -42,7 +43,7 @@ fn run_uci(args: &[String]) -> Result<()> {
                 let value = it.next().context("--model requires a path or uniform")?;
                 model = (value != "uniform").then(|| PathBuf::from(value));
             }
-            "--ep" | "--threads" => {
+            "--ep" | "--threads" | "--infer-batch" => {
                 let value = it.next().with_context(|| format!("{arg} requires a value"))?;
                 opts.parse_flag(arg, value)?;
             }

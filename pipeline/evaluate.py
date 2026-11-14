@@ -35,6 +35,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     for flag, default in (("elo0", 0.0), ("elo1", 40.0), ("alpha", 0.05), ("beta", 0.05)):
         parser.add_argument(f"--{flag}", type=float, default=default)
     parser.add_argument("--ep", choices=("auto", "cpu", "coreml"), default="auto")
+    parser.add_argument("--infer-batch", type=int)
     args = parser.parse_args(argv)
     try:
         _validate(args)
@@ -44,6 +45,9 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def _validate(args) -> None:
+    infer_batch = getattr(args, "infer_batch", None)
+    if infer_batch is not None and (type(infer_batch) is not int or not 1 <= infer_batch <= 64):
+        raise ValueError("--infer-batch must be an integer in 1..64")
     for field in ("block_games", "max_games", "batch", "max_plies", "threads"):
         value = getattr(args, field)
         if type(value) is not int or value <= 0:
@@ -140,6 +144,8 @@ def _block(args, block: int, games: int) -> tuple[int, int, int]:
                "--out", str(temporary), "--batch", str(args.batch),
                "--max-plies", str(args.max_plies), "--ep", args.ep,
                "--threads", str(args.threads)]
+    if getattr(args, "infer_batch", None) is not None:
+        command.extend(["--infer-batch", str(args.infer_batch)])
     try:
         measured_run(command, unit=f"block_{block:02d}", check=True)
         counts = _read_block(temporary, args, block, games)

@@ -2,6 +2,7 @@
 
 pub mod infer_opts;
 pub mod ort_infer;
+pub mod fixed_batch;
 
 use anyhow::{ensure, Result};
 use cozy_chess::{Board, Move};

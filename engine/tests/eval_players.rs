@@ -17,6 +17,7 @@ fn opts() -> InferOptions {
     InferOptions {
         ep: Ep::Cpu,
         threads: 1,
+        ..InferOptions::default()
     }
 }
 
