@@ -69,7 +69,24 @@ The engine prints a progress line every five seconds, even before a game finishe
 
 `phase=loading_model` identifies startup. `phase=evaluating` with a growing `in_flight` duration and unchanged evaluation/move counts shows one evaluation has not returned; a changing elapsed-time display alone does not establish progress. `since_progress` measures time since a move, successful evaluation, completion or write count changed. Keep several successive lines when diagnosing a stall. A short probe completing four moves does not establish full-game speed or an eight-hour generation ETA.
 
-Existing run files and their measurements should be preserved after interruption. Restart through `pipeline/loop.py`; an unfinished chunk will be regenerated. Probe outputs belong in a separate `work/` folder. The overnight preset remains a workload to measure, and M2's eight-hour target requires measured generation results.
+Existing run files and their measurements should be preserved after interruption. Restart through `pipeline/loop.py`; an unfinished chunk will be regenerated. Keep diagnostic outputs separate from the run. On a Mac with a OneDrive-backed repository, use a local directory such as `~/Library/Logs/chessbot` for console logs and probes. Moving a console log does not establish that dataset or checkpoint writes are healthy. The overnight preset remains a workload to measure, and M2's eight-hour target requires measured generation results.
+
+### Measuring model-call overhead
+
+If self-play advances slowly, pause the real loop before running this bounded comparison:
+
+```bash
+~/.venvs/chessbot/bin/python pipeline/infer_probe.py \
+  --model data_store/runs/main/gens/gen_0000/model.onnx
+```
+
+On macOS, the script runs six cases using the actual Rust inference path: CPU and CoreML selection, each with ordinary inputs and memory patterns enabled (`exact_on`), ordinary inputs and memory patterns disabled (`exact_off`), and inputs padded to 32 positions with memory patterns enabled (`fixed32_on`). Production inference retains its existing settings. Linux defaults to the three CPU cases. `--providers cpu` selects CPU alone; `--timeout 30` limits each subprocess, so the default six-case Mac comparison has at most three minutes of engine work. A timeout marks an incomplete diagnostic rather than proving a deadlock.
+
+Each case loads one model session, encodes the same position in Rust, and repeats the requested group sizes `32,31,32,20` five times with two calls per group. Timing covers tensor construction, model execution and result extraction. Input preparation, output validation and file writing occur outside those timings. The comparison is useful because repeated fixed-size calls can be fast even when changing sizes incurs setup costs. The ORT library recommends disabling memory patterns for varying input sizes; this experiment measures that setting rather than assuming it resolves the owner's slowdown.
+
+Results go to a new local `~/Library/Logs/chessbot/infer-probe-*` directory on macOS (`work/` on Linux), or a new directory supplied by `--out`. Raw JSONL retains every call and session settings. `summary.json` and `summary.csv` record the model hash, startup time, first-cycle time, total model-call time, and median durations after a requested-size change and on immediate repeats. The two medians exclude the first cycle; startup and first-use costs remain available in the raw records. A zero-rounded duration in old game logs is not a zero-cost model call. The selected provider label still permits ORT CPU fallback.
+
+The equivalent individual command is `engine infer-bench --model PATH --ep cpu --batches 32,31,32,20 --cycles 5 --repeat 2 --memory-pattern on`. Add `--pad-to 32` for fixed-size inputs or use `--memory-pattern off` to isolate that setting. Batches are capped at 64 and only one call's outputs are retained. These diagnostics establish model-call behavior; full-generation duration and actual process RSS still require an M2 run. Preserving complete chunks on resume remains a separate acceptance check.
 
 Stage elapsed time is summed across all recorded attempts, including work lost to interruption or failure. Process durations are retained separately and must not be added again to stage totals. Measured stage spans include setup/validation and retries. `train_attempt_seconds` retains the trainer's narrower successful-attempt duration, including its probe/validation evaluations; it is not pure optimizer time. `train_seconds` prefers complete stage telemetry and falls back to that legacy duration only when no training stage ledger exists.
 
