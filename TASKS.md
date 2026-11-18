@@ -1,6 +1,8 @@
 ---
 # TASKS.md — Phased Implementation Checklist
 
+The notes under each task record validation at the time it was implemented. See the [README](README.md#verification) for current verification commands and known issues.
+
 ## Phase 1: Rust Board Wrapper, Move Bijection & Binary Encoder
 - [x] Initialize Cargo project in `engine/` with `cozy-chess = "0.3.4"`, `bytemuck`, and `ayhow`.
 - [x] Implement `engine/src/encoder/move_mapper.rs`: canonical square flipping and the 4,168 move bijection from `SPEC.md`.
@@ -41,11 +43,11 @@
 ---
 ## Roadmap for Phases 6–10
 **Assumptions:**
-- Target: every promoted generation beats the previous best (SPRT, SPEC §10) and the `random`/`material` baselines, and Elo is tracked as an outcome. The ladder gives relative Elo per generation; an optional Stockfish calibration gives absolute Elo. Not a lichess bot.
+- Target: use candidate–incumbent matches to select generations and track relative Elo (SPEC §10). The `random` and `material` matches are post-promotion diagnostics. Optional Stockfish calibration is planned in Phase 10.
 - Supervised bootstrap: one Lichess Elite monthly PGN (downloaded by the owner), capped at about 4.2M samples (about 2 GB of `.bin`).
 - One generation (selfplay + train + match) may take an **overnight ~8 h** on the M1.
 - Inference: CoreML EP on macOS with automatic CPU fallback. CPU-only everywhere else.
-- Whole-pipeline peak RAM ≤ 3–4 GB. Stages run as **separate sequential subprocesses**, so peak RAM is the maximum of any single stage, never the sum.
+- Target peak RSS for the overnight milestone is ≤ 3.5 GB per stage. The trainer and inference workloads run in separate sequential subprocesses.
 - Measured baselines (M1, commit `49c9462`): batch-1 CoreML ≈ 380 evals/s (a 200-sim selfplay game ≈ 80 s); tree-only search with the uniform net ≈ 1M sims/s.
 
 **Rules for every task below:**
@@ -56,10 +58,11 @@
 - Every MCTS arena is capped at `MAX_NODES = 65,536`.
 - Gate commands must pass on a Linux CPU box (no MPS, no CoreML) with fixed seeds in under ~5 minutes.
 - `pipeline/*.py` scripts are stdlib-only. They call training code through `subprocess` with `sys.executable training/<script>.py`, so each stage's RAM is freed when its process exits.
-- Python tests for `pipeline/` live in `pipeline/tests/` and are run as `pytest pipeline/tests/<file>`.
+- Run pipeline tests from the repository root with `python -m pytest -c pipeline/pyproject.toml pipeline/tests/<file>`.
 
 ## Phase 6: Chunked Data, Training Script & Supervised Generation 0
 - [ ] **6.1 Portable inference options + CoreML fixed-bucket padding + uniform selfplay.**
+  - Current implementation includes provider and thread flags and uniform self-play. Fixed-bucket padding remains open on `main`, where Rust submits the requested batch shape. The pilot fixed-width implementation is in [draft PR #18](https://github.com/azlevitan/chessbot/pull/18).
   - Files: `engine/src/nn/ort_infer.rs`, `engine/src/nn/infer_opts.rs` (new), `engine/src/nn/mod.rs`, `engine/src/cli/selfplay.rs`, `engine/src/main.rs`, `engine/tests/infer_opts.rs` (new).
   - Add `pub enum Ep { Auto, Cpu, CoreMl }` and `pub struct InferOptions { pub ep: Ep, pub threads: usize }` (default `Auto`, `1`), with `InferOptions::parse_flag(flag, value) -> Result<bool>` for `--ep` / `--threads`.
   - Change the loader to `load_evaluator(model: Option<&Path>, opts: &InferOptions)`. Register CoreML only when `cfg!(target_os = "macos")` and `ep != Cpu`. `ep == CoreMl` on another OS is an error. Set `with_intra_threads(opts.threads)`.
@@ -71,7 +74,7 @@
     3. `next_bucket(n)` maps `1->1`, `2..=8->8`, `9..=16->16`, `17..=32->32`, `33..=64->64`.
     4. `engine selfplay --games 1 --sims 8 --max-plies 10 --seed 1 --out <tmp>` with **no** `--model` exits 0 and writes `10 * 492` bytes.
   - `GATE 5` must still pass.
-- [ ] **6.2 Chunk writer with atomic write + sidecar (SPEC §6).**
+- [x] **6.2 Chunk writer with atomic write + sidecar (SPEC §6).**
   - Files: `engine/Cargo.toml` (add `serde = { version = "1", features = ["derive"] }`, `serde_json = "1"`), `engine/src/cli/chunk_writer.rs` (new; wraps `SampleWriter`), `engine/src/cli/mod.rs`, `engine/src/cli/selfplay.rs`, `engine/src/cli/convert_pgn.rs`, `engine/src/selfplay/stats.rs` (new: result/termination counters), `engine/tests/chunks.rs` (new).
   - Interface: `ChunkWriter::create(bin_path) -> Result<Self>` (writes `.bin.tmp`), `.write(&TrainingSample)`, `.finish(sidecar: serde_json::Value) -> Result<u64>`. `finish` does the rename dance from §6 and fills `"format"` and `"samples"`.
   - `selfplay --out X.bin` now writes `X.bin` and `X.json` (selfplay sidecar from §6; `resign` block with `threshold: -1.0`, zeros until 7.5).
@@ -147,7 +150,7 @@
     2. `run.json` matches.
     3. `engine uci --model gens/gen_0000/model.onnx --ep cpu` answers `go nodes 32` with a legal `bestmove`.
     4. A second invocation is a no-op: the `model.pt` mtime is unchanged.
-- [x] **GATE 6:** `cd engine && cargo test --release && cd .. && pytest training/tests/test_chunk_dataset.py training/tests/test_train.py && pytest pipeline/tests/test_bootstrap.py` exits with `0`.
+- [x] **GATE 6 (historical):** Release engine, trainer, chunk dataset, and bootstrap checks passed during Phase 6. The current training suite has a seeded outcome-coverage failure in `test_single_game_sidecars_match_both_perspectives`. Both games draw at the ply cap. [Current verification commands](README.md#verification)
 
 ## Phase 7: Search Throughput, Repetition & FPU (Batched MCTS, Tree Reuse, Parallel Self-Play)
 - [x] **7.1 Refactor search into a resumable `SearchTree` + In-Tree Repetition + FPU.**
@@ -392,5 +395,6 @@ Each is checked off when its acceptance command shows the stated numbers. Use `~
     1. `report.tsv` shows `selfplay_secs + train_secs + match_secs ≤ 8 h`.
     2. Peak RSS of every stage is ≤ 3.5 GB.
     3. Interrupting with Ctrl-C mid-selfplay and restarting finishes the generation without regenerating complete chunks.
+  - `main` leaves `selfplay_secs` and `match_secs` unavailable and does not persist peak stage RSS. Stage telemetry and additional M1 inference work are in [draft PR #18](https://github.com/azlevitan/chessbot/pull/18). The target-hardware acceptance run remains open.
 - [ ] **M3 – Self-improvement:** at least 3 promoted generations after gen 0. `ladder.json` Elo is strictly increasing over promoted gens. A direct 200-game `evaluate.py` match of the latest best vs gen 0 has `elo_ci95[0] > 0`.
 - [ ] **M4 – Calibrated strength (after GATE 10):** `calibrate.py` on the latest best writes `calibration.json`, and the engine completes a 20-game `cutechess-cli` match vs `stockfish UCI_Elo 1320` with no illegal moves or time forfeits. Report the Elo estimate in `report.tsv`'s notes.

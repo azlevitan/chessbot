@@ -52,10 +52,11 @@ The updated contract is explicit in SPEC §4:
   `1e-5` in both heads. Real policy probabilities use the stored legal-move mask.
 - Nonfinite outputs, shape mismatches, empty sources, and invalid masks fail.
 
-These are additional validation rules, not a claim that the original failure was
-harmless on every possible input. Normal export on the owner's saved M1 model
-still needs to pass. No checkpoint weights, architecture, tensor encoding or
-runtime optimization settings change.
+The owner later reported that the saved Generation 0 checkpoint passed export
+with these rules. The recovery uses the existing weights, architecture, tensor
+encoding, and runtime optimization settings. This procedure applies to bootstrap;
+candidate export and recovery run through the generation loop.
+[Generation 0 results and provenance](GENERATION_0_RESULTS.json)
 
 ## Continue with the baseline matches
 
