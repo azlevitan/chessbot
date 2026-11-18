@@ -70,7 +70,7 @@ Use a new run directory when changing bootstrap training flags, and a fresh outp
 
 ## Current status
 
-- **Generation 0.** The recorded M1 run used 30,000 supervised updates and achieved 41.43% policy top-1 accuracy on held-out human positions and WDL loss of 0.8882. The owner reported a score of 1.0 in each 20-game match against the random and material baselines at 200 simulations per move. The raw model and match files are held locally. [Results and provenance](training/GENERATION_0_RESULTS.json)
+- **Generation 0.** The recorded M1 run used 30,000 supervised updates and achieved 41.43% policy top-1 accuracy on held-out human positions and WDL loss of 0.8882. A score of 1.0 was reported in each 20-game match against the random and material baselines at 200 simulations per move. The raw model and match files are held locally. [Results and provenance](training/GENERATION_0_RESULTS.json)
 - **Self-play loop.** The training, promotion, pruning, and reporting stages are implemented and exercised by small CPU integration tests. Full-scale overnight timing, peak RSS per stage, and sustained improvement across promoted generations are open milestones. `selfplay_secs` and `match_secs` are currently unavailable in the report. [Roadmap and milestones](TASKS.md#milestones-real-m1-runs-owner-driven-not-cloud-gated)
 - **Playing interface.** UCI supports synchronous `go nodes` and `go movetime`. Game-clock management, interruptible search, live search info, runtime options, and Stockfish calibration are Phase 10 work. [Technical contracts](SPEC.md#11-planned-uci-extensions-phase-10)
 
